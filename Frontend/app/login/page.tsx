@@ -33,7 +33,7 @@ export default function LoginPage() {
         return
       }
 
-      storeAuthSession(data.user, data.token)
+      storeAuthSession(data)
 
       if (data.user.role === 'staff') {
         router.push('/staff')

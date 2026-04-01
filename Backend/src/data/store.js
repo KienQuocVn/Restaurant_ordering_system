@@ -1,7 +1,20 @@
 const fs = require('fs')
+const path = require('path')
 const crypto = require('crypto')
-const { DatabaseSync } = require('node:sqlite')
-const { DATA_DIR, DATA_FILE, DB_FILE } = require('../config')
+const { Pool } = require('pg')
+const {
+  DATA_DIR,
+  DATA_FILE,
+  DATABASE_URL,
+  PGHOST,
+  PGPORT,
+  PGDATABASE,
+  PGUSER,
+  PGPASSWORD,
+  PGSSL,
+  ROOT_DIR,
+  EXPORT_JSON_SNAPSHOT,
+} = require('../config')
 
 function createId(prefix) {
   return `${prefix}_${crypto.randomBytes(8).toString('hex')}`
@@ -39,13 +52,17 @@ function createDefaultPermissions(role) {
   }
 }
 
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true })
+  }
+}
+
 function createSeedData() {
   const now = isoNow()
-  const ownerId = createId('user')
-  const staffId = createId('user')
+  const ownerId = 'user_owner_demo'
+  const staffId = 'user_staff_demo'
   const restaurantId = 'rest_demo_001'
-  const categoryPizza = createId('cat')
-  const categoryDrinks = createId('cat')
 
   return {
     users: [
@@ -53,23 +70,27 @@ function createSeedData() {
         id: ownerId,
         email: 'owner@example.com',
         password_hash: hashPassword('123456'),
+        full_name: 'Demo Owner',
         name: 'Demo Owner',
         role: 'owner',
         restaurant_id: restaurantId,
         is_active: true,
         permissions: createDefaultPermissions('owner'),
         created_at: now,
+        updated_at: now,
       },
       {
         id: staffId,
         email: 'staff@example.com',
         password_hash: hashPassword('123456'),
+        full_name: 'Demo Staff',
         name: 'Demo Staff',
         role: 'staff',
         restaurant_id: restaurantId,
         is_active: true,
         permissions: createDefaultPermissions('staff'),
         created_at: now,
+        updated_at: now,
       },
     ],
     restaurants: [
@@ -79,64 +100,100 @@ function createSeedData() {
         address: '123 Demo Street',
         owner_id: ownerId,
         created_at: now,
+        updated_at: now,
       },
     ],
     tables: [
       {
-        id: createId('table'),
+        id: 'table_demo_001',
         restaurant_id: restaurantId,
         table_number: 1,
         zone: 'Tang 1',
         capacity: 4,
         guest_count: 0,
         status: 'empty',
-        qr_token: createId('qrtoken'),
+        qr_token: 'qrtoken_demo_001',
         created_at: now,
+        updated_at: now,
       },
       {
-        id: createId('table'),
+        id: 'table_demo_002',
         restaurant_id: restaurantId,
         table_number: 2,
         zone: 'Tang 1',
         capacity: 4,
         guest_count: 0,
         status: 'empty',
-        qr_token: createId('qrtoken'),
+        qr_token: 'qrtoken_demo_002',
         created_at: now,
+        updated_at: now,
       },
       {
-        id: createId('table'),
+        id: 'table_demo_003',
         restaurant_id: restaurantId,
         table_number: 3,
         zone: 'VIP',
         capacity: 6,
         guest_count: 0,
         status: 'empty',
-        qr_token: createId('qrtoken'),
+        qr_token: 'qrtoken_demo_003',
         created_at: now,
+        updated_at: now,
       },
     ],
     categories: [
       {
-        id: categoryPizza,
+        id: 'cat_pizza_demo',
         restaurant_id: restaurantId,
         name: 'Pizza',
         sort_order: 1,
         is_active: true,
+        created_at: now,
+        updated_at: now,
       },
       {
-        id: categoryDrinks,
+        id: 'cat_drinks_demo',
         restaurant_id: restaurantId,
         name: 'Drinks',
         sort_order: 2,
         is_active: true,
+        created_at: now,
+        updated_at: now,
+      },
+    ],
+    vouchers: [
+      {
+        id: 'voucher_welcome_demo',
+        restaurant_id: restaurantId,
+        code: 'WELCOME10',
+        name: 'Giam 10% hoa don',
+        type: 'percent',
+        value: 10,
+        min_order_value: 100000,
+        max_discount_amount: 50000,
+        is_active: true,
+        created_at: now,
+        updated_at: now,
+      },
+      {
+        id: 'voucher_coffee_demo',
+        restaurant_id: restaurantId,
+        code: 'COFFEE25K',
+        name: 'Giam 25.000 VND',
+        type: 'fixed',
+        value: 25000,
+        min_order_value: 120000,
+        max_discount_amount: 25000,
+        is_active: true,
+        created_at: now,
+        updated_at: now,
       },
     ],
     menu_items: [
       {
-        id: createId('item'),
+        id: 'item_margherita_demo',
         restaurant_id: restaurantId,
-        category_id: categoryPizza,
+        category_id: 'cat_pizza_demo',
         name: 'Margherita Pizza',
         description: 'Classic pizza with tomato and mozzarella',
         price: 129000,
@@ -152,11 +209,13 @@ function createSeedData() {
             ],
           },
         ],
+        created_at: now,
+        updated_at: now,
       },
       {
-        id: createId('item'),
+        id: 'item_pepperoni_demo',
         restaurant_id: restaurantId,
-        category_id: categoryPizza,
+        category_id: 'cat_pizza_demo',
         name: 'Pepperoni Pizza',
         description: 'Pepperoni and cheese',
         price: 149000,
@@ -164,17 +223,19 @@ function createSeedData() {
         is_available: true,
         display_order: 2,
         options: [],
+        created_at: now,
+        updated_at: now,
       },
       {
-        id: createId('item'),
+        id: 'item_iced_tea_demo',
         restaurant_id: restaurantId,
-        category_id: categoryDrinks,
+        category_id: 'cat_drinks_demo',
         name: 'Iced Tea',
         description: 'Refreshing iced tea',
         price: 29000,
         image_url: '',
         is_available: true,
-        display_order: 1,
+        display_order: 3,
         options: [
           {
             name: 'Sugar',
@@ -185,6 +246,8 @@ function createSeedData() {
             ],
           },
         ],
+        created_at: now,
+        updated_at: now,
       },
     ],
     sessions: [],
@@ -192,477 +255,630 @@ function createSeedData() {
     order_items: [],
     payments: [],
     activity_logs: [],
+    auth_sessions: [],
   }
-}
-
-function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
-  }
-
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(createSeedData(), null, 2), 'utf8')
-  }
-}
-
-let dbInstance = null
-
-function ensureColumn(db, tableName, columnName, sqlDefinition) {
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all()
-  const exists = columns.some((column) => column.name === columnName)
-  if (!exists) {
-    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${sqlDefinition};`)
-  }
-}
-
-function getDb() {
-  ensureDataFile()
-  if (!dbInstance) {
-    dbInstance = new DatabaseSync(DB_FILE)
-    dbInstance.exec('PRAGMA journal_mode = WAL;')
-    dbInstance.exec('PRAGMA foreign_keys = ON;')
-    dbInstance.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT NOT NULL,
-        role TEXT NOT NULL,
-        restaurant_id TEXT,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        permissions_json TEXT NOT NULL DEFAULT '{}',
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS restaurants (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        address TEXT,
-        owner_id TEXT,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS tables (
-        id TEXT PRIMARY KEY,
-        restaurant_id TEXT NOT NULL,
-        table_number INTEGER NOT NULL,
-        zone TEXT,
-        capacity INTEGER,
-        guest_count INTEGER,
-        status TEXT,
-        qr_token TEXT UNIQUE NOT NULL,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS categories (
-        id TEXT PRIMARY KEY,
-        restaurant_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        is_active INTEGER NOT NULL DEFAULT 1
-      );
-      CREATE TABLE IF NOT EXISTS menu_items (
-        id TEXT PRIMARY KEY,
-        restaurant_id TEXT NOT NULL,
-        category_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        price INTEGER NOT NULL DEFAULT 0,
-        image_url TEXT,
-        is_available INTEGER NOT NULL DEFAULT 1,
-        display_order INTEGER NOT NULL DEFAULT 0,
-        options_json TEXT NOT NULL DEFAULT '[]'
-      );
-      CREATE TABLE IF NOT EXISTS sessions (
-        id TEXT PRIMARY KEY,
-        restaurant_id TEXT NOT NULL,
-        table_id TEXT NOT NULL,
-        status TEXT NOT NULL,
-        opened_at TEXT NOT NULL,
-        closed_at TEXT,
-        total_amount INTEGER NOT NULL DEFAULT 0,
-        paid_amount INTEGER NOT NULL DEFAULT 0,
-        payment_method TEXT
-      );
-      CREATE TABLE IF NOT EXISTS orders (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        restaurant_id TEXT NOT NULL,
-        table_id TEXT NOT NULL,
-        customer_id TEXT,
-        status TEXT NOT NULL,
-        total_amount INTEGER NOT NULL DEFAULT 0,
-        notes TEXT,
-        cancel_reason TEXT,
-        created_at TEXT NOT NULL,
-        confirmed_at TEXT
-      );
-      CREATE TABLE IF NOT EXISTS order_items (
-        id TEXT PRIMARY KEY,
-        order_id TEXT NOT NULL,
-        menu_item_id TEXT NOT NULL,
-        product_name TEXT NOT NULL,
-        unit_price INTEGER NOT NULL DEFAULT 0,
-        quantity INTEGER NOT NULL DEFAULT 0,
-        selected_options_json TEXT NOT NULL DEFAULT '[]',
-        note TEXT,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS payments (
-        id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        order_id TEXT,
-        method TEXT NOT NULL,
-        amount INTEGER NOT NULL DEFAULT 0,
-        status TEXT NOT NULL,
-        qr_code_url TEXT,
-        created_at TEXT NOT NULL,
-        paid_at TEXT
-      );
-      CREATE TABLE IF NOT EXISTS activity_logs (
-        id TEXT PRIMARY KEY,
-        created_at TEXT NOT NULL,
-        actor_id TEXT,
-        restaurant_id TEXT,
-        action TEXT NOT NULL,
-        detail TEXT
-      );
-    `)
-    ensureColumn(dbInstance, 'users', 'permissions_json', "TEXT NOT NULL DEFAULT '{}'")
-
-    const count = dbInstance.prepare('SELECT COUNT(*) AS count FROM users').get().count
-    if (count === 0) {
-      const source = fs.existsSync(DATA_FILE)
-        ? JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))
-        : createSeedData()
-      writeStore(source)
-    }
-  }
-
-  return dbInstance
 }
 
 function normalizeRows(data) {
-  if (!Array.isArray(data.activity_logs)) data.activity_logs = []
-  if (!Array.isArray(data.users)) data.users = []
-  if (!Array.isArray(data.tables)) data.tables = []
+  const normalized = {
+    users: Array.isArray(data.users) ? data.users : [],
+    restaurants: Array.isArray(data.restaurants) ? data.restaurants : [],
+    tables: Array.isArray(data.tables) ? data.tables : [],
+    categories: Array.isArray(data.categories) ? data.categories : [],
+    vouchers: Array.isArray(data.vouchers) ? data.vouchers : [],
+    menu_items: Array.isArray(data.menu_items) ? data.menu_items : [],
+    sessions: Array.isArray(data.sessions) ? data.sessions : [],
+    orders: Array.isArray(data.orders) ? data.orders : [],
+    order_items: Array.isArray(data.order_items) ? data.order_items : [],
+    payments: Array.isArray(data.payments) ? data.payments : [],
+    activity_logs: Array.isArray(data.activity_logs) ? data.activity_logs : [],
+    auth_sessions: Array.isArray(data.auth_sessions) ? data.auth_sessions : [],
+  }
 
-  data.users = data.users.map((user) => ({
-    is_active: true,
+  normalized.users = normalized.users.map((user) => ({
     ...user,
+    full_name: user.full_name || user.name || '',
+    name: user.name || user.full_name || '',
     is_active: Boolean(user.is_active),
     permissions: {
       ...createDefaultPermissions(user.role),
       ...(user.permissions || {}),
     },
+    created_at: user.created_at || isoNow(),
+    updated_at: user.updated_at || user.created_at || isoNow(),
   }))
-  data.tables = data.tables.map((table) => ({
-    guest_count: 0,
+
+  normalized.restaurants = normalized.restaurants.map((restaurant) => ({
+    address: '',
+    ...restaurant,
+    created_at: restaurant.created_at || isoNow(),
+    updated_at: restaurant.updated_at || restaurant.created_at || isoNow(),
+  }))
+
+  normalized.tables = normalized.tables.map((table) => ({
     zone: 'Main',
     capacity: 4,
+    guest_count: 0,
+    status: 'empty',
     ...table,
+    capacity: Number(table.capacity || 4),
+    guest_count: Number(table.guest_count || 0),
+    table_number: Number(table.table_number || 0),
+    created_at: table.created_at || isoNow(),
+    updated_at: table.updated_at || table.created_at || isoNow(),
   }))
-  data.categories = (data.categories || []).map((category) => ({
+
+  normalized.categories = normalized.categories.map((category) => ({
     ...category,
     is_active: Boolean(category.is_active),
+    sort_order: Number(category.sort_order || 0),
+    created_at: category.created_at || isoNow(),
+    updated_at: category.updated_at || category.created_at || isoNow(),
   }))
-  data.menu_items = (data.menu_items || []).map((item) => ({
+
+  normalized.vouchers = normalized.vouchers.map((voucher) => ({
+    ...voucher,
+    value: Number(voucher.value || 0),
+    min_order_value: Number(voucher.min_order_value || 0),
+    max_discount_amount:
+      voucher.max_discount_amount === null ||
+      voucher.max_discount_amount === undefined
+        ? null
+        : Number(voucher.max_discount_amount),
+    is_active: Boolean(voucher.is_active),
+    created_at: voucher.created_at || isoNow(),
+    updated_at: voucher.updated_at || voucher.created_at || isoNow(),
+  }))
+
+  normalized.menu_items = normalized.menu_items.map((item) => ({
     ...item,
     price: Number(item.price || 0),
     is_available: Boolean(item.is_available),
+    display_order: Number(item.display_order || 0),
     options: Array.isArray(item.options) ? item.options : [],
+    created_at: item.created_at || isoNow(),
+    updated_at: item.updated_at || item.created_at || isoNow(),
   }))
-  data.sessions = (data.sessions || []).map((session) => ({
+
+  normalized.sessions = normalized.sessions.map((session) => ({
     ...session,
+    guest_count: Number(session.guest_count || 0),
+    subtotal_amount: Number(session.subtotal_amount || 0),
+    discount_amount: Number(session.discount_amount || 0),
     total_amount: Number(session.total_amount || 0),
     paid_amount: Number(session.paid_amount || 0),
+    created_at: session.created_at || session.opened_at || isoNow(),
+    updated_at: session.updated_at || session.created_at || session.opened_at || isoNow(),
   }))
-  data.orders = (data.orders || []).map((order) => ({
+
+  normalized.orders = normalized.orders.map((order) => ({
     cancel_reason: '',
+    notes: '',
     ...order,
     total_amount: Number(order.total_amount || 0),
+    created_at: order.created_at || isoNow(),
   }))
-  data.order_items = (data.order_items || []).map((item) => ({
+
+  normalized.order_items = normalized.order_items.map((item) => ({
+    note: '',
     ...item,
     unit_price: Number(item.unit_price || 0),
     quantity: Number(item.quantity || 0),
-    selected_options: Array.isArray(item.selected_options) ? item.selected_options : [],
-  }))
-  data.payments = (data.payments || []).map((payment) => ({
-    ...payment,
-    amount: Number(payment.amount || 0),
+    selected_options: Array.isArray(item.selected_options)
+      ? item.selected_options
+      : [],
+    created_at: item.created_at || isoNow(),
   }))
 
-  return data
+  normalized.payments = normalized.payments.map((payment) => ({
+    provider_payload: {},
+    ...payment,
+    amount: Number(payment.amount || 0),
+    received_amount: Number(payment.received_amount || payment.amount || 0),
+    provider_payload:
+      payment.provider_payload && typeof payment.provider_payload === 'object'
+        ? payment.provider_payload
+        : {},
+    created_at: payment.created_at || isoNow(),
+  }))
+
+  normalized.activity_logs = normalized.activity_logs.map((log) => ({
+    detail: '',
+    ...log,
+    created_at: log.created_at || isoNow(),
+  }))
+
+  normalized.auth_sessions = normalized.auth_sessions.map((session) => ({
+    user_agent: '',
+    ip_address: '',
+    ...session,
+    created_at: session.created_at || isoNow(),
+    last_used_at: session.last_used_at || session.created_at || isoNow(),
+  }))
+
+  return normalized
+}
+
+function cloneData(data) {
+  return JSON.parse(JSON.stringify(data))
+}
+
+let pool = null
+let storeCache = null
+let initialized = false
+
+function getPool() {
+  if (pool) return pool
+  const config = DATABASE_URL
+    ? {
+        connectionString: DATABASE_URL,
+        ssl: PGSSL ? { rejectUnauthorized: false } : false,
+      }
+    : {
+        host: PGHOST,
+        port: PGPORT,
+        database: PGDATABASE,
+        user: PGUSER,
+        password: PGPASSWORD,
+        ssl: PGSSL ? { rejectUnauthorized: false } : false,
+      }
+  pool = new Pool(config)
+  return pool
+}
+
+async function runSchema() {
+  const schemaPath = path.join(ROOT_DIR, 'Frontend', 'scripts', '01-init-schema.sql')
+  const schemaSql = fs.readFileSync(schemaPath, 'utf8')
+  const client = await getPool().connect()
+  try {
+    await client.query(schemaSql)
+  } finally {
+    client.release()
+  }
+}
+
+async function maybeSeedFromSnapshot() {
+  const client = await getPool().connect()
+  try {
+    const existingUsers = await client.query('SELECT COUNT(*)::int AS count FROM users')
+    if (existingUsers.rows[0].count > 0) return
+    const seedData = createSeedData()
+    await persistStore(seedData, client)
+  } finally {
+    client.release()
+  }
+}
+
+async function loadStoreFromDb() {
+  const client = await getPool().connect()
+  try {
+    const [
+      users,
+      restaurants,
+      tables,
+      categories,
+      vouchers,
+      menuItems,
+      sessions,
+      orders,
+      orderItems,
+      payments,
+      activityLogs,
+      authSessions,
+    ] = await Promise.all([
+      client.query('SELECT * FROM users ORDER BY created_at ASC'),
+      client.query('SELECT * FROM restaurants ORDER BY created_at ASC'),
+      client.query('SELECT * FROM tables ORDER BY table_number ASC'),
+      client.query('SELECT * FROM categories ORDER BY sort_order ASC, created_at ASC'),
+      client.query('SELECT * FROM vouchers ORDER BY code ASC'),
+      client.query('SELECT * FROM menu_items ORDER BY display_order ASC, created_at ASC'),
+      client.query('SELECT * FROM sessions ORDER BY opened_at ASC'),
+      client.query('SELECT * FROM orders ORDER BY created_at ASC'),
+      client.query('SELECT * FROM order_items ORDER BY created_at ASC'),
+      client.query('SELECT * FROM payments ORDER BY created_at ASC'),
+      client.query('SELECT * FROM activity_logs ORDER BY created_at ASC'),
+      client.query('SELECT * FROM auth_sessions ORDER BY created_at ASC'),
+    ])
+
+    return normalizeRows({
+      users: users.rows.map((row) => ({
+        ...row,
+        full_name: row.full_name,
+        name: row.full_name,
+        is_active: row.is_active,
+        permissions: {
+          ...createDefaultPermissions(row.role),
+          ...(row.permissions_json || {}),
+        },
+      })),
+      restaurants: restaurants.rows,
+      tables: tables.rows,
+      categories: categories.rows,
+      vouchers: vouchers.rows,
+      menu_items: menuItems.rows.map((row) => ({
+        ...row,
+        options: Array.isArray(row.options_json) ? row.options_json : [],
+      })),
+      sessions: sessions.rows,
+      orders: orders.rows,
+      order_items: orderItems.rows.map((row) => ({
+        ...row,
+        selected_options: Array.isArray(row.selected_options_json)
+          ? row.selected_options_json
+          : [],
+      })),
+      payments: payments.rows.map((row) => ({
+        ...row,
+        provider_payload:
+          row.provider_payload_json && typeof row.provider_payload_json === 'object'
+            ? row.provider_payload_json
+            : {},
+      })),
+      activity_logs: activityLogs.rows,
+      auth_sessions: authSessions.rows,
+    })
+  } finally {
+    client.release()
+  }
+}
+
+function assertInitialized() {
+  if (!initialized || !storeCache) {
+    throw new Error('Data store not initialized')
+  }
 }
 
 function readStore() {
-  const db = getDb()
-  const data = {
-    users: db.prepare('SELECT * FROM users').all().map((row) => ({
-      ...row,
-      is_active: Boolean(row.is_active),
-      permissions: {
-        ...createDefaultPermissions(row.role),
-        ...JSON.parse(row.permissions_json || '{}'),
-      },
-    })),
-    restaurants: db.prepare('SELECT * FROM restaurants').all(),
-    tables: db.prepare('SELECT * FROM tables').all().map((row) => ({
-      ...row,
-      guest_count: Number(row.guest_count || 0),
-      capacity: Number(row.capacity || 0),
-    })),
-    categories: db.prepare('SELECT * FROM categories').all().map((row) => ({
-      ...row,
-      is_active: Boolean(row.is_active),
-    })),
-    menu_items: db.prepare('SELECT * FROM menu_items').all().map((row) => ({
-      id: row.id,
-      restaurant_id: row.restaurant_id,
-      category_id: row.category_id,
-      name: row.name,
-      description: row.description || '',
-      price: Number(row.price || 0),
-      image_url: row.image_url || '',
-      is_available: Boolean(row.is_available),
-      display_order: Number(row.display_order || 0),
-      options: JSON.parse(row.options_json || '[]'),
-    })),
-    sessions: db.prepare('SELECT * FROM sessions').all().map((row) => ({
-      ...row,
-      total_amount: Number(row.total_amount || 0),
-      paid_amount: Number(row.paid_amount || 0),
-    })),
-    orders: db.prepare('SELECT * FROM orders').all().map((row) => ({
-      ...row,
-      total_amount: Number(row.total_amount || 0),
-    })),
-    order_items: db.prepare('SELECT * FROM order_items').all().map((row) => ({
-      id: row.id,
-      order_id: row.order_id,
-      menu_item_id: row.menu_item_id,
-      product_name: row.product_name,
-      unit_price: Number(row.unit_price || 0),
-      quantity: Number(row.quantity || 0),
-      selected_options: JSON.parse(row.selected_options_json || '[]'),
-      note: row.note || '',
-      created_at: row.created_at,
-    })),
-    payments: db.prepare('SELECT * FROM payments').all().map((row) => ({
-      ...row,
-      amount: Number(row.amount || 0),
-    })),
-    activity_logs: db.prepare('SELECT * FROM activity_logs').all(),
-  }
-
-  return normalizeRows(data)
+  assertInitialized()
+  return cloneData(storeCache)
 }
 
-function writeStore(data) {
-  const normalized = normalizeRows({
-    users: data.users || [],
-    restaurants: data.restaurants || [],
-    tables: data.tables || [],
-    categories: data.categories || [],
-    menu_items: data.menu_items || [],
-    sessions: data.sessions || [],
-    orders: data.orders || [],
-    order_items: data.order_items || [],
-    payments: data.payments || [],
-    activity_logs: data.activity_logs || [],
-  })
-  const db = getDb()
+async function persistStore(data, providedClient = null) {
+  const normalized = normalizeRows(data)
+  const client = providedClient || (await getPool().connect())
+  const ownsClient = !providedClient
 
-  const insertUser = db.prepare(`
-    INSERT INTO users (id, email, password_hash, name, role, restaurant_id, is_active, permissions_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  const insertRestaurant = db.prepare(`
-    INSERT INTO restaurants (id, name, address, owner_id, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `)
-  const insertTable = db.prepare(`
-    INSERT INTO tables (id, restaurant_id, table_number, zone, capacity, guest_count, status, qr_token, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  const insertCategory = db.prepare(`
-    INSERT INTO categories (id, restaurant_id, name, sort_order, is_active)
-    VALUES (?, ?, ?, ?, ?)
-  `)
-  const insertMenuItem = db.prepare(`
-    INSERT INTO menu_items (id, restaurant_id, category_id, name, description, price, image_url, is_available, display_order, options_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  const insertSession = db.prepare(`
-    INSERT INTO sessions (id, restaurant_id, table_id, status, opened_at, closed_at, total_amount, paid_amount, payment_method)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  const insertOrder = db.prepare(`
-    INSERT INTO orders (id, session_id, restaurant_id, table_id, customer_id, status, total_amount, notes, cancel_reason, created_at, confirmed_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  const insertOrderItem = db.prepare(`
-    INSERT INTO order_items (id, order_id, menu_item_id, product_name, unit_price, quantity, selected_options_json, note, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  const insertPayment = db.prepare(`
-    INSERT INTO payments (id, session_id, order_id, method, amount, status, qr_code_url, created_at, paid_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `)
-  const insertActivity = db.prepare(`
-    INSERT INTO activity_logs (id, created_at, actor_id, restaurant_id, action, detail)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `)
-
-  db.exec('BEGIN')
   try {
-    db.exec(`
-      DELETE FROM activity_logs;
-      DELETE FROM payments;
-      DELETE FROM order_items;
-      DELETE FROM orders;
-      DELETE FROM sessions;
-      DELETE FROM menu_items;
-      DELETE FROM categories;
-      DELETE FROM tables;
-      DELETE FROM restaurants;
-      DELETE FROM users;
+    if (ownsClient) await client.query('BEGIN')
+
+    await client.query(`
+      TRUNCATE TABLE
+        auth_sessions,
+        activity_logs,
+        payments,
+        order_items,
+        orders,
+        sessions,
+        vouchers,
+        menu_items,
+        categories,
+        tables,
+        restaurants,
+        users
+      RESTART IDENTITY CASCADE
     `)
 
-    normalized.users.forEach((user) => {
-      insertUser.run(
-        user.id,
-        user.email,
-        user.password_hash,
-        user.name,
-        user.role,
-        user.restaurant_id || null,
-        user.is_active ? 1 : 0,
-        JSON.stringify(user.permissions || createDefaultPermissions(user.role)),
-        user.created_at
+    for (const user of normalized.users) {
+      await client.query(
+        `
+          INSERT INTO users (
+            id, email, password_hash, full_name, role, restaurant_id,
+            is_active, permissions_json, created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)
+        `,
+        [
+          user.id,
+          user.email,
+          user.password_hash,
+          user.full_name || user.name,
+          user.role,
+          user.restaurant_id || null,
+          user.is_active,
+          JSON.stringify(user.permissions || createDefaultPermissions(user.role)),
+          user.created_at,
+          user.updated_at || user.created_at,
+        ]
       )
-    })
-    normalized.restaurants.forEach((restaurant) => {
-      insertRestaurant.run(
-        restaurant.id,
-        restaurant.name,
-        restaurant.address || '',
-        restaurant.owner_id || null,
-        restaurant.created_at
-      )
-    })
-    normalized.tables.forEach((table) => {
-      insertTable.run(
-        table.id,
-        table.restaurant_id,
-        Number(table.table_number || 0),
-        table.zone || 'Main',
-        Number(table.capacity || 4),
-        Number(table.guest_count || 0),
-        table.status || 'empty',
-        table.qr_token,
-        table.created_at
-      )
-    })
-    normalized.categories.forEach((category) => {
-      insertCategory.run(
-        category.id,
-        category.restaurant_id,
-        category.name,
-        Number(category.sort_order || 0),
-        category.is_active ? 1 : 0
-      )
-    })
-    normalized.menu_items.forEach((item) => {
-      insertMenuItem.run(
-        item.id,
-        item.restaurant_id,
-        item.category_id,
-        item.name,
-        item.description || '',
-        Number(item.price || 0),
-        item.image_url || '',
-        item.is_available ? 1 : 0,
-        Number(item.display_order || 0),
-        JSON.stringify(item.options || [])
-      )
-    })
-    normalized.sessions.forEach((session) => {
-      insertSession.run(
-        session.id,
-        session.restaurant_id,
-        session.table_id,
-        session.status,
-        session.opened_at,
-        session.closed_at || null,
-        Number(session.total_amount || 0),
-        Number(session.paid_amount || 0),
-        session.payment_method || null
-      )
-    })
-    normalized.orders.forEach((order) => {
-      insertOrder.run(
-        order.id,
-        order.session_id,
-        order.restaurant_id,
-        order.table_id,
-        order.customer_id || null,
-        order.status,
-        Number(order.total_amount || 0),
-        order.notes || '',
-        order.cancel_reason || '',
-        order.created_at,
-        order.confirmed_at || null
-      )
-    })
-    normalized.order_items.forEach((item) => {
-      insertOrderItem.run(
-        item.id,
-        item.order_id,
-        item.menu_item_id,
-        item.product_name,
-        Number(item.unit_price || 0),
-        Number(item.quantity || 0),
-        JSON.stringify(item.selected_options || []),
-        item.note || '',
-        item.created_at
-      )
-    })
-    normalized.payments.forEach((payment) => {
-      insertPayment.run(
-        payment.id,
-        payment.session_id,
-        payment.order_id || null,
-        payment.method,
-        Number(payment.amount || 0),
-        payment.status,
-        payment.qr_code_url || '',
-        payment.created_at,
-        payment.paid_at || null
-      )
-    })
-    normalized.activity_logs.forEach((log) => {
-      insertActivity.run(
-        log.id,
-        log.created_at,
-        log.actor_id || null,
-        log.restaurant_id || null,
-        log.action,
-        log.detail || ''
-      )
-    })
+    }
 
-    db.exec('COMMIT')
-    fs.writeFileSync(DATA_FILE, JSON.stringify(normalized, null, 2), 'utf8')
+    for (const restaurant of normalized.restaurants) {
+      await client.query(
+        `
+          INSERT INTO restaurants (id, name, address, owner_id, created_at, updated_at)
+          VALUES ($1,$2,$3,$4,$5,$6)
+        `,
+        [
+          restaurant.id,
+          restaurant.name,
+          restaurant.address || '',
+          restaurant.owner_id || null,
+          restaurant.created_at,
+          restaurant.updated_at || restaurant.created_at,
+        ]
+      )
+    }
+
+    for (const table of normalized.tables) {
+      await client.query(
+        `
+          INSERT INTO tables (
+            id, restaurant_id, table_number, zone, capacity, guest_count,
+            status, qr_token, created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `,
+        [
+          table.id,
+          table.restaurant_id,
+          Number(table.table_number || 0),
+          table.zone || 'Main',
+          Number(table.capacity || 4),
+          Number(table.guest_count || 0),
+          table.status || 'empty',
+          table.qr_token,
+          table.created_at,
+          table.updated_at || table.created_at,
+        ]
+      )
+    }
+
+    for (const category of normalized.categories) {
+      await client.query(
+        `
+          INSERT INTO categories (
+            id, restaurant_id, name, sort_order, is_active, created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `,
+        [
+          category.id,
+          category.restaurant_id,
+          category.name,
+          Number(category.sort_order || 0),
+          category.is_active,
+          category.created_at,
+          category.updated_at || category.created_at,
+        ]
+      )
+    }
+
+    for (const voucher of normalized.vouchers) {
+      await client.query(
+        `
+          INSERT INTO vouchers (
+            id, restaurant_id, code, name, type, value,
+            min_order_value, max_discount_amount, is_active, created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        `,
+        [
+          voucher.id,
+          voucher.restaurant_id,
+          voucher.code,
+          voucher.name,
+          voucher.type,
+          Number(voucher.value || 0),
+          Number(voucher.min_order_value || 0),
+          voucher.max_discount_amount === null || voucher.max_discount_amount === undefined
+            ? null
+            : Number(voucher.max_discount_amount),
+          voucher.is_active,
+          voucher.created_at,
+          voucher.updated_at || voucher.created_at,
+        ]
+      )
+    }
+
+    for (const item of normalized.menu_items) {
+      await client.query(
+        `
+          INSERT INTO menu_items (
+            id, restaurant_id, category_id, name, description, price,
+            image_url, is_available, display_order, options_json, created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)
+        `,
+        [
+          item.id,
+          item.restaurant_id,
+          item.category_id,
+          item.name,
+          item.description || '',
+          Number(item.price || 0),
+          item.image_url || '',
+          item.is_available,
+          Number(item.display_order || 0),
+          JSON.stringify(item.options || []),
+          item.created_at,
+          item.updated_at || item.created_at,
+        ]
+      )
+    }
+
+    for (const session of normalized.sessions) {
+      await client.query(
+        `
+          INSERT INTO sessions (
+            id, restaurant_id, table_id, status, opened_at, closed_at,
+            guest_count, subtotal_amount, discount_amount, total_amount,
+            paid_amount, payment_method, voucher_id, voucher_code, created_at, updated_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+        `,
+        [
+          session.id,
+          session.restaurant_id,
+          session.table_id,
+          session.status,
+          session.opened_at,
+          session.closed_at || null,
+          Number(session.guest_count || 0),
+          Number(session.subtotal_amount || 0),
+          Number(session.discount_amount || 0),
+          Number(session.total_amount || 0),
+          Number(session.paid_amount || 0),
+          session.payment_method || null,
+          session.voucher_id || null,
+          session.voucher_code || null,
+          session.created_at || session.opened_at,
+          session.updated_at || session.created_at || session.opened_at,
+        ]
+      )
+    }
+
+    for (const order of normalized.orders) {
+      await client.query(
+        `
+          INSERT INTO orders (
+            id, session_id, restaurant_id, table_id, customer_id, status,
+            total_amount, notes, cancel_reason, created_at, confirmed_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        `,
+        [
+          order.id,
+          order.session_id,
+          order.restaurant_id,
+          order.table_id,
+          order.customer_id || null,
+          order.status,
+          Number(order.total_amount || 0),
+          order.notes || '',
+          order.cancel_reason || '',
+          order.created_at,
+          order.confirmed_at || null,
+        ]
+      )
+    }
+
+    for (const item of normalized.order_items) {
+      await client.query(
+        `
+          INSERT INTO order_items (
+            id, order_id, menu_item_id, product_name, unit_price,
+            quantity, selected_options_json, note, created_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)
+        `,
+        [
+          item.id,
+          item.order_id,
+          item.menu_item_id,
+          item.product_name,
+          Number(item.unit_price || 0),
+          Number(item.quantity || 0),
+          JSON.stringify(item.selected_options || []),
+          item.note || '',
+          item.created_at,
+        ]
+      )
+    }
+
+    for (const payment of normalized.payments) {
+      await client.query(
+        `
+          INSERT INTO payments (
+            id, session_id, order_id, method, provider, amount, received_amount,
+            status, qr_code_url, provider_txn_id, provider_payload_json,
+            verification_status, verified_at, reconciliation_status, reconciled_at,
+            created_at, paid_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17)
+        `,
+        [
+          payment.id,
+          payment.session_id,
+          payment.order_id || null,
+          payment.method,
+          payment.provider || 'cash',
+          Number(payment.amount || 0),
+          Number(payment.received_amount || payment.amount || 0),
+          payment.status,
+          payment.qr_code_url || '',
+          payment.provider_txn_id || null,
+          JSON.stringify(payment.provider_payload || {}),
+          payment.verification_status || 'pending',
+          payment.verified_at || null,
+          payment.reconciliation_status || 'pending',
+          payment.reconciled_at || null,
+          payment.created_at,
+          payment.paid_at || null,
+        ]
+      )
+    }
+
+    for (const log of normalized.activity_logs) {
+      await client.query(
+        `
+          INSERT INTO activity_logs (id, actor_id, restaurant_id, action, detail, created_at)
+          VALUES ($1,$2,$3,$4,$5,$6)
+        `,
+        [
+          log.id,
+          log.actor_id || null,
+          log.restaurant_id || null,
+          log.action,
+          log.detail || '',
+          log.created_at,
+        ]
+      )
+    }
+
+    for (const authSession of normalized.auth_sessions) {
+      await client.query(
+        `
+          INSERT INTO auth_sessions (
+            id, user_id, restaurant_id, refresh_token_hash, user_agent,
+            ip_address, expires_at, last_used_at, revoked_at, created_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `,
+        [
+          authSession.id,
+          authSession.user_id,
+          authSession.restaurant_id || null,
+          authSession.refresh_token_hash,
+          authSession.user_agent || '',
+          authSession.ip_address || '',
+          authSession.expires_at,
+          authSession.last_used_at,
+          authSession.revoked_at || null,
+          authSession.created_at,
+        ]
+      )
+    }
+
+    if (ownsClient) await client.query('COMMIT')
+
+    storeCache = normalized
+    ensureDataDir()
+    if (EXPORT_JSON_SNAPSHOT) {
+      fs.writeFileSync(DATA_FILE, JSON.stringify(normalized, null, 2), 'utf8')
+    }
   } catch (error) {
-    db.exec('ROLLBACK')
+    if (ownsClient) {
+      try {
+        await client.query('ROLLBACK')
+      } catch {}
+    }
     throw error
+  } finally {
+    if (ownsClient) client.release()
   }
+}
+
+async function writeStore(data) {
+  await persistStore(data)
+}
+
+async function initStore() {
+  if (initialized) return
+  ensureDataDir()
+  await runSchema()
+  await maybeSeedFromSnapshot()
+  storeCache = await loadStoreFromDb()
+  if (EXPORT_JSON_SNAPSHOT) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(storeCache, null, 2), 'utf8')
+  }
+  initialized = true
 }
 
 module.exports = {
   createId,
   hashPassword,
   isoNow,
-  ensureDataFile,
+  initStore,
   readStore,
   writeStore,
 }

@@ -17,8 +17,15 @@ interface PaymentDialogProps {
   tableNumber: number
   totalAmount: number
   qrCodeUrl?: string
+  vouchers?: Array<{
+    id: string
+    code: string
+    name: string
+    type: string
+    value: number
+  }>
   onClose: () => void
-  onPaymentSubmit: (paymentMethod: string) => void
+  onPaymentSubmit: (paymentMethod: string, voucherCode: string) => void
   loading?: boolean
 }
 
@@ -27,11 +34,13 @@ export function PaymentDialog({
   tableNumber,
   totalAmount,
   qrCodeUrl,
+  vouchers = [],
   onClose,
   onPaymentSubmit,
   loading,
 }: PaymentDialogProps) {
   const [selectedMethod, setSelectedMethod] = useState<string>('')
+  const [voucherCode, setVoucherCode] = useState('')
 
   const paymentMethods = [
     { id: 'cash', name: 'Cash', code: 'CS' },
@@ -42,8 +51,9 @@ export function PaymentDialog({
 
   const handleSubmit = () => {
     if (!selectedMethod) return
-    onPaymentSubmit(selectedMethod)
+    onPaymentSubmit(selectedMethod, voucherCode.trim())
     setSelectedMethod('')
+    setVoucherCode('')
   }
 
   return (
@@ -82,6 +92,36 @@ export function PaymentDialog({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Voucher / Discount Code</label>
+            <input
+              value={voucherCode}
+              onChange={(event) => setVoucherCode(event.target.value.toUpperCase())}
+              placeholder="Nhap ma voucher neu co"
+              className="w-full rounded-md border border-input bg-white px-3 py-2 text-sm"
+              disabled={loading}
+            />
+            {vouchers.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {vouchers.filter((voucher) => voucher.type === 'fixed' || voucher.type === 'percent').map((voucher) => (
+                  <button
+                    key={voucher.id}
+                    type="button"
+                    onClick={() => setVoucherCode(voucher.code)}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      voucherCode === voucher.code
+                        ? 'border-[#2ad38b] bg-green-50 text-[#128c5a]'
+                        : 'border-gray-200 bg-white text-gray-700'
+                    }`}
+                    disabled={loading}
+                  >
+                    {voucher.code}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {selectedMethod === 'momo' && (

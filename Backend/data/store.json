@@ -8,7 +8,17 @@
       "name": "Demo Owner",
       "role": "owner",
       "restaurant_id": "rest_demo_001",
-      "created_at": "2026-04-01T08:02:45.672Z"
+      "created_at": "2026-04-01T08:02:45.672Z",
+      "permissions_json": "{}",
+      "permissions": {
+        "manage_menu": true,
+        "manage_categories": true,
+        "manage_staff": true,
+        "manage_tables": true,
+        "view_dashboard": true,
+        "manage_orders": true,
+        "process_payments": true
+      }
     },
     {
       "is_active": true,
@@ -18,7 +28,17 @@
       "name": "Demo Staff",
       "role": "staff",
       "restaurant_id": "rest_demo_001",
-      "created_at": "2026-04-01T08:02:45.672Z"
+      "created_at": "2026-04-01T08:02:45.672Z",
+      "permissions_json": "{}",
+      "permissions": {
+        "manage_menu": false,
+        "manage_categories": false,
+        "manage_staff": false,
+        "manage_tables": false,
+        "view_dashboard": false,
+        "manage_orders": true,
+        "process_payments": true
+      }
     },
     {
       "is_active": true,
@@ -28,7 +48,17 @@
       "name": "New Staff",
       "role": "staff",
       "restaurant_id": "rest_demo_001",
-      "created_at": "2026-04-01T08:20:13.423Z"
+      "created_at": "2026-04-01T08:20:13.423Z",
+      "permissions_json": "{}",
+      "permissions": {
+        "manage_menu": false,
+        "manage_categories": false,
+        "manage_staff": false,
+        "manage_tables": false,
+        "view_dashboard": false,
+        "manage_orders": true,
+        "process_payments": true
+      }
     },
     {
       "is_active": true,
@@ -38,7 +68,17 @@
       "name": "Kiều Kiến Quốc",
       "role": "owner",
       "restaurant_id": "rest_1cb89f7bac90713e",
-      "created_at": "2026-04-01T08:32:27.708Z"
+      "created_at": "2026-04-01T08:32:27.708Z",
+      "permissions_json": "{}",
+      "permissions": {
+        "manage_menu": true,
+        "manage_categories": true,
+        "manage_staff": true,
+        "manage_tables": true,
+        "view_dashboard": true,
+        "manage_orders": true,
+        "process_payments": true
+      }
     }
   ],
   "restaurants": [
@@ -115,6 +155,32 @@
       "is_active": true
     }
   ],
+  "vouchers": [
+    {
+      "id": "voucher_f12d4ff185d4573f",
+      "restaurant_id": "rest_demo_001",
+      "code": "WELCOME10",
+      "name": "Giam 10% hoa don",
+      "type": "percent",
+      "value": 10,
+      "min_order_value": 100000,
+      "max_discount_amount": 50000,
+      "is_active": true,
+      "created_at": "2026-04-01T10:13:38.341Z"
+    },
+    {
+      "id": "voucher_1d3460dd44cca7c7",
+      "restaurant_id": "rest_demo_001",
+      "code": "COFFEE25K",
+      "name": "Giam 25.000 VND",
+      "type": "fixed",
+      "value": 25000,
+      "min_order_value": 120000,
+      "max_discount_amount": 25000,
+      "is_active": true,
+      "created_at": "2026-04-01T10:13:38.342Z"
+    }
+  ],
   "menu_items": [
     {
       "id": "item_d3c4225b4f8974ec",
@@ -163,7 +229,12 @@
       "closed_at": null,
       "total_amount": 10000,
       "paid_amount": 0,
-      "payment_method": null
+      "payment_method": null,
+      "guest_count": 0,
+      "subtotal_amount": 10000,
+      "discount_amount": 0,
+      "voucher_id": null,
+      "voucher_code": null
     }
   ],
   "orders": [

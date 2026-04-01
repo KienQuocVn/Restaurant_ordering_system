@@ -11,7 +11,7 @@ import {
   apiUrl,
   clearAuthSession,
   formatCurrency,
-  getStoredToken,
+  getStoredRealtimeToken,
   getStoredUser,
 } from '@/lib/api'
 
@@ -51,6 +51,22 @@ interface DiningTable {
   orders: Order[]
 }
 
+interface MenuItem {
+  id: string
+  name: string
+  price: number
+  category_id: string
+}
+
+interface Voucher {
+  id: string
+  code: string
+  name: string
+  type: string
+  value: number
+  is_active?: boolean
+}
+
 function playNotificationTone() {
   const AudioCtx =
     typeof window !== 'undefined'
@@ -86,75 +102,99 @@ export default function StaffPage() {
     qrCodeUrl: '',
   })
   const [selectedTable, setSelectedTable] = useState<DiningTable | null>(null)
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+  const [vouchers, setVouchers] = useState<Voucher[]>([])
+  const [staffOrderDraft, setStaffOrderDraft] = useState({
+    itemId: '',
+    quantity: 1,
+    note: '',
+  })
   const knownOrdersRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
-    const parsedUser = getStoredUser()
-    if (!parsedUser) {
-      router.push('/login')
-      return
-    }
+    let cancelled = false
 
-    if (parsedUser.role !== 'staff') {
-      router.push('/')
-      return
-    }
-    if (!parsedUser.restaurant_id) {
-      router.push('/login')
-      return
-    }
+    getStoredUser().then((parsedUser) => {
+      if (cancelled) return
+      if (!parsedUser) {
+        router.push('/login')
+        return
+      }
 
-    setUser(parsedUser)
-    loadOrders(parsedUser.restaurant_id)
-    loadTables(parsedUser.restaurant_id)
+      if (parsedUser.role !== 'staff') {
+        router.push('/')
+        return
+      }
+      if (!parsedUser.restaurant_id) {
+        router.push('/login')
+        return
+      }
+
+      setUser(parsedUser)
+      loadOrders(parsedUser.restaurant_id)
+      loadTables(parsedUser.restaurant_id)
+      loadMenu(parsedUser.restaurant_id)
+      loadVouchers(parsedUser.restaurant_id)
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [router])
 
   useEffect(() => {
     if (!user?.restaurant_id) return
 
-    const token = getStoredToken()
-    const events = new EventSource(
-      apiUrl(
-        `/api/events?restaurant_id=${user.restaurant_id}&role=staff&token=${encodeURIComponent(
-          token || ''
-        )}`
+    let events: EventSource | null = null
+    let disposed = false
+
+    getStoredRealtimeToken().then((token) => {
+      if (disposed || !token) return
+
+      events = new EventSource(
+        apiUrl(
+          `/api/events?restaurant_id=${user.restaurant_id}&role=staff&token=${encodeURIComponent(
+            token
+          )}`
+        )
       )
-    )
 
-    events.addEventListener('order.created', (event) => {
-      const payload = JSON.parse((event as MessageEvent).data)
-      if (!knownOrdersRef.current.has(payload.orderId)) {
-        playNotificationTone()
+      events.addEventListener('order.created', (event) => {
+        const payload = JSON.parse((event as MessageEvent).data)
+        if (!knownOrdersRef.current.has(payload.orderId)) {
+          playNotificationTone()
+        }
+        setNotice(`New order for table ${payload.tableNumber}`)
+        loadOrders(user.restaurant_id)
+        loadTables(user.restaurant_id)
+      })
+
+      events.addEventListener('order.updated', () => {
+        loadOrders(user.restaurant_id)
+        loadTables(user.restaurant_id)
+      })
+
+      events.addEventListener('table.updated', () => {
+        loadTables(user.restaurant_id)
+      })
+
+      events.addEventListener('session.updated', () => {
+        loadTables(user.restaurant_id)
+      })
+
+      events.addEventListener('payment.completed', () => {
+        loadOrders(user.restaurant_id)
+        loadTables(user.restaurant_id)
+      })
+
+      events.onerror = () => {
+        setNotice('Realtime connection interrupted, retrying...')
       }
-      setNotice(`New order for table ${payload.tableNumber}`)
-      loadOrders(user.restaurant_id)
-      loadTables(user.restaurant_id)
     })
-
-    events.addEventListener('order.updated', () => {
-      loadOrders(user.restaurant_id)
-      loadTables(user.restaurant_id)
-    })
-
-    events.addEventListener('table.updated', () => {
-      loadTables(user.restaurant_id)
-    })
-
-    events.addEventListener('session.updated', () => {
-      loadTables(user.restaurant_id)
-    })
-
-    events.addEventListener('payment.completed', () => {
-      loadOrders(user.restaurant_id)
-      loadTables(user.restaurant_id)
-    })
-
-    events.onerror = () => {
-      setNotice('Realtime connection interrupted, retrying...')
-    }
 
     return () => {
-      events.close()
+      disposed = true
+      events?.close()
     }
   }, [user])
 
@@ -197,6 +237,32 @@ export default function StaffPage() {
     }
   }
 
+  const loadMenu = async (restaurantId: string) => {
+    try {
+      const response = await apiFetch(`/api/menu?restaurant_id=${restaurantId}`)
+      if (!response.ok) throw new Error('Failed to load menu')
+      const data = await response.json()
+      setMenuItems(data.items || [])
+      setStaffOrderDraft((prev) => ({
+        ...prev,
+        itemId: prev.itemId || data.items?.[0]?.id || '',
+      }))
+    } catch (err) {
+      console.error('Error loading menu:', err)
+    }
+  }
+
+  const loadVouchers = async (restaurantId: string) => {
+    try {
+      const response = await apiFetch(`/api/vouchers?restaurant_id=${restaurantId}`, {}, true)
+      if (!response.ok) throw new Error('Failed to load vouchers')
+      const data = await response.json()
+      setVouchers(data || [])
+    } catch (err) {
+      console.error('Error loading vouchers:', err)
+    }
+  }
+
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     setLoading(true)
     try {
@@ -224,16 +290,17 @@ export default function StaffPage() {
   }
 
   const handlePaymentClick = (order: Order) => {
+    const relatedTable = tables.find((table) => table.id === order.table_id)
     setPaymentDialog({
       open: true,
       orderId: order.id,
       tableNumber: order.dining_tables.table_number,
-      totalAmount: order.total_amount,
+      totalAmount: relatedTable?.session?.total_amount || order.total_amount,
       qrCodeUrl: '',
     })
   }
 
-  const handlePaymentSubmit = async (paymentMethod: string) => {
+  const handlePaymentSubmit = async (paymentMethod: string, voucherCode: string) => {
     setLoading(true)
     try {
       const response = await apiFetch(
@@ -244,6 +311,7 @@ export default function StaffPage() {
             orderId: paymentDialog.orderId,
             paymentMethod,
             amount: paymentDialog.totalAmount,
+            voucherCode,
           }),
         },
         true
@@ -255,6 +323,7 @@ export default function StaffPage() {
       if (user) {
         loadOrders(user.restaurant_id)
         loadTables(user.restaurant_id)
+        loadVouchers(user.restaurant_id)
       }
 
       if (data.payment?.qr_code_url) {
@@ -274,6 +343,47 @@ export default function StaffPage() {
     } catch (err) {
       console.error('Error processing payment:', err)
       setError('Failed to process payment')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateStaffOrder = async () => {
+    if (!user || !selectedTable || !staffOrderDraft.itemId) return
+    const menuItem = menuItems.find((item) => item.id === staffOrderDraft.itemId)
+    if (!menuItem) return
+
+    setLoading(true)
+    try {
+      const response = await apiFetch('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          userId: user.id,
+          restaurantId: user.restaurant_id,
+          tableId: selectedTable.id,
+          guestCount: selectedTable.guest_count || 1,
+          items: [
+            {
+              menuItemId: menuItem.id,
+              quantity: Number(staffOrderDraft.quantity || 1),
+              price: menuItem.price,
+              note: staffOrderDraft.note,
+              selectedOptions: [],
+            },
+          ],
+          notes: 'Staff entered order on behalf of customer',
+        }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to create order')
+      setStaffOrderDraft((prev) => ({ ...prev, quantity: 1, note: '' }))
+      loadOrders(user.restaurant_id)
+      loadTables(user.restaurant_id)
+      setNotice(`Da them mon cho ban ${selectedTable.table_number}`)
+    } catch (err) {
+      console.error('Error creating manual order:', err)
+      setError('Khong the nhap mon thay khach')
     } finally {
       setLoading(false)
     }
@@ -361,7 +471,9 @@ export default function StaffPage() {
   if (!user) return null
 
   const pendingOrders = orders.filter((o) => o.status === 'pending')
-  const inProgressOrders = orders.filter((o) => o.status === 'preparing')
+  const inProgressOrders = orders.filter((o) =>
+    ['acknowledged', 'sent_to_kitchen', 'preparing'].includes(o.status)
+  )
   const completedOrders = orders.filter((o) => o.status === 'completed')
   const occupiedTables = tables.filter((t) => t.orders.length > 0)
   const canManageOrders = user.permissions?.manage_orders !== false
@@ -494,9 +606,12 @@ export default function StaffPage() {
                 const resolvedStatus = table.status || latestOrder?.status || 'empty'
                 const statusColors: Record<string, string> = {
                   pending: 'bg-yellow-100 border-yellow-300',
+                  acknowledged: 'bg-amber-100 border-amber-300',
+                  sent_to_kitchen: 'bg-indigo-100 border-indigo-300',
                   preparing: 'bg-blue-100 border-blue-300',
                   completed: 'bg-green-100 border-green-300',
                   payment_requested: 'bg-orange-100 border-orange-300',
+                  payment_pending: 'bg-purple-100 border-purple-300',
                   occupied: 'bg-sky-100 border-sky-300',
                   empty: 'bg-white border-gray-300',
                 }
@@ -538,6 +653,12 @@ export default function StaffPage() {
                     <p className="font-medium">{selectedTable.session?.status || 'empty'}</p>
                   </div>
                   <div className="rounded border bg-gray-50 p-3">
+                    <p className="text-sm text-gray-500">Subtotal</p>
+                    <p className="font-medium">
+                      {formatCurrency((selectedTable.session as any)?.subtotal_amount || selectedTable.session?.total_amount || 0)}
+                    </p>
+                  </div>
+                  <div className="rounded border bg-gray-50 p-3">
                     <p className="text-sm text-gray-500">Current total</p>
                     <p className="font-medium">
                       {formatCurrency(selectedTable.session?.total_amount || 0)}
@@ -547,6 +668,62 @@ export default function StaffPage() {
                     <p className="text-sm text-gray-500">Guest count</p>
                     <p className="font-medium">{selectedTable.guest_count || 0}</p>
                   </div>
+                </div>
+
+                <div className="rounded-lg border bg-emerald-50 p-4 mb-4">
+                  <div className="flex items-center justify-between gap-4 mb-3">
+                    <div>
+                      <h5 className="font-semibold">Nhap mon thay khach</h5>
+                      <p className="text-sm text-gray-600">
+                        Staff co the them nhanh mon vao session hien tai cua ban.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <select
+                      value={staffOrderDraft.itemId}
+                      onChange={(event) =>
+                        setStaffOrderDraft((prev) => ({ ...prev, itemId: event.target.value }))
+                      }
+                      className="rounded-md border border-input bg-white px-3 py-2 text-sm"
+                      disabled={loading}
+                    >
+                      {menuItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} - {formatCurrency(item.price)}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min="1"
+                      value={staffOrderDraft.quantity}
+                      onChange={(event) =>
+                        setStaffOrderDraft((prev) => ({
+                          ...prev,
+                          quantity: Math.max(1, Number(event.target.value || 1)),
+                        }))
+                      }
+                      className="rounded-md border border-input bg-white px-3 py-2 text-sm"
+                      disabled={loading}
+                    />
+                    <input
+                      value={staffOrderDraft.note}
+                      onChange={(event) =>
+                        setStaffOrderDraft((prev) => ({ ...prev, note: event.target.value }))
+                      }
+                      placeholder="Ghi chu mon"
+                      className="rounded-md border border-input bg-white px-3 py-2 text-sm md:col-span-2"
+                      disabled={loading}
+                    />
+                  </div>
+                  <Button
+                    className="mt-3 bg-[#2ad38b] hover:bg-[#0cceb0]"
+                    onClick={handleCreateStaffOrder}
+                    disabled={loading || !staffOrderDraft.itemId}
+                  >
+                    Them Mon Cho Ban Nay
+                  </Button>
                 </div>
 
                 <div className="space-y-3">
@@ -612,6 +789,7 @@ export default function StaffPage() {
         tableNumber={paymentDialog.tableNumber}
         totalAmount={paymentDialog.totalAmount}
         qrCodeUrl={paymentDialog.qrCodeUrl}
+        vouchers={vouchers.filter((voucher) => voucher.is_active !== false)}
         onClose={() =>
           setPaymentDialog({
             open: false,

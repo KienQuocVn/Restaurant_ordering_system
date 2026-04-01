@@ -30,6 +30,8 @@ interface OrderCardProps {
 
 const statusBadgeColor: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
+  acknowledged: 'bg-amber-100 text-amber-800',
+  sent_to_kitchen: 'bg-indigo-100 text-indigo-800',
   preparing: 'bg-blue-100 text-blue-800',
   completed: 'bg-green-100 text-green-800',
   cancelled: 'bg-red-100 text-red-800',
@@ -50,6 +52,10 @@ export function OrderCard({
   const getNextStatus = (currentStatus: string) => {
     switch (currentStatus) {
       case 'pending':
+        return 'acknowledged'
+      case 'acknowledged':
+        return 'sent_to_kitchen'
+      case 'sent_to_kitchen':
         return 'preparing'
       case 'preparing':
         return 'completed'
@@ -109,9 +115,13 @@ export function OrderCard({
             className="w-full bg-[#2ad38b] hover:bg-[#0cceb0] text-white"
             disabled={loading}
           >
-            {nextStatus === 'preparing'
-              ? 'Start Preparing'
-              : 'Mark Complete'}
+            {nextStatus === 'acknowledged'
+              ? 'Xac Nhan Da Nhan'
+              : nextStatus === 'sent_to_kitchen'
+                ? 'Da Chuyen Bep'
+                : nextStatus === 'preparing'
+                  ? 'Bep Dang Lam'
+                  : 'Mark Complete'}
           </Button>
         )}
 

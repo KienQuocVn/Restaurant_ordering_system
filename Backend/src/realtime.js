@@ -1,3 +1,5 @@
+const { CORS_ORIGIN } = require('./config')
+
 const clients = new Set()
 
 function sendEvent(client, event, payload) {
@@ -10,7 +12,8 @@ function subscribe(req, res, context = {}) {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': req.headers.origin || CORS_ORIGIN,
+    'Access-Control-Allow-Credentials': 'true',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   })
   res.write(': connected\n\n')

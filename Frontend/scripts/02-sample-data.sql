@@ -1,46 +1,140 @@
--- Sample data for testing the QR Order System
+INSERT INTO users (
+  id,
+  email,
+  password_hash,
+  full_name,
+  role,
+  restaurant_id,
+  is_active,
+  permissions_json,
+  created_at,
+  updated_at
+) VALUES
+  (
+    'user_owner_demo',
+    'owner@example.com',
+    '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92',
+    'Demo Owner',
+    'owner',
+    'rest_demo_001',
+    TRUE,
+    '{"manage_menu": true, "manage_categories": true, "manage_staff": true, "manage_tables": true, "view_dashboard": true, "manage_orders": true, "process_payments": true}'::jsonb,
+    NOW(),
+    NOW()
+  ),
+  (
+    'user_staff_demo',
+    'staff@example.com',
+    '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92',
+    'Demo Staff',
+    'staff',
+    'rest_demo_001',
+    TRUE,
+    '{"manage_menu": false, "manage_categories": false, "manage_staff": false, "manage_tables": false, "view_dashboard": false, "manage_orders": true, "process_payments": true}'::jsonb,
+    NOW(),
+    NOW()
+  )
+ON CONFLICT (id) DO NOTHING;
 
--- Create sample restaurant owned by test owner
-INSERT INTO public.restaurants (id, name, owner_id, address, phone)
+INSERT INTO restaurants (id, name, address, owner_id, created_at, updated_at)
 VALUES (
-  'rest-001',
-  'Pizza Palace',
-  'user-owner-1',
-  '123 Main Street',
-  '555-0123'
-) ON CONFLICT DO NOTHING;
+  'rest_demo_001',
+  'Demo QR Restaurant',
+  '123 Demo Street',
+  'user_owner_demo',
+  NOW(),
+  NOW()
+)
+ON CONFLICT (id) DO NOTHING;
 
--- Create sample dining tables
-INSERT INTO public.dining_tables (id, restaurant_id, table_number, capacity, status)
-VALUES 
-  ('table-001', 'rest-001', 1, 4, 'available'),
-  ('table-002', 'rest-001', 2, 4, 'available'),
-  ('table-003', 'rest-001', 3, 6, 'available'),
-  ('table-004', 'rest-001', 4, 2, 'available'),
-  ('table-005', 'rest-001', 5, 4, 'available'),
-  ('table-006', 'rest-001', 6, 8, 'available')
-ON CONFLICT DO NOTHING;
+UPDATE users
+SET restaurant_id = 'rest_demo_001', updated_at = NOW()
+WHERE id IN ('user_owner_demo', 'user_staff_demo');
 
--- Create sample menu categories
-INSERT INTO public.menu_categories (id, restaurant_id, name, description, display_order)
-VALUES 
-  ('cat-001', 'rest-001', 'Pizza', 'Delicious fresh pizzas', 1),
-  ('cat-002', 'rest-001', 'Pasta', 'Italian pasta dishes', 2),
-  ('cat-003', 'rest-001', 'Drinks', 'Beverages', 3),
-  ('cat-004', 'rest-001', 'Desserts', 'Sweet treats', 4)
-ON CONFLICT DO NOTHING;
+INSERT INTO tables (id, restaurant_id, table_number, zone, capacity, guest_count, status, qr_token, created_at, updated_at)
+VALUES
+  ('table_demo_001', 'rest_demo_001', 1, 'Tang 1', 4, 0, 'empty', 'qrtoken_demo_001', NOW(), NOW()),
+  ('table_demo_002', 'rest_demo_001', 2, 'Tang 1', 4, 0, 'empty', 'qrtoken_demo_002', NOW(), NOW()),
+  ('table_demo_003', 'rest_demo_001', 3, 'VIP', 6, 0, 'empty', 'qrtoken_demo_003', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
 
--- Create sample menu items
-INSERT INTO public.menu_items (id, restaurant_id, category_id, name, description, price, is_available, display_order)
-VALUES 
-  ('item-001', 'rest-001', 'cat-001', 'Margherita Pizza', 'Classic pizza with tomato and mozzarella', 12.99, true, 1),
-  ('item-002', 'rest-001', 'cat-001', 'Pepperoni Pizza', 'Pizza with pepperoni and cheese', 14.99, true, 2),
-  ('item-003', 'rest-001', 'cat-001', 'Vegetarian Pizza', 'Pizza with fresh vegetables', 13.99, true, 3),
-  ('item-004', 'rest-001', 'cat-002', 'Spaghetti Carbonara', 'Classic Italian pasta', 11.99, true, 1),
-  ('item-005', 'rest-001', 'cat-002', 'Fettuccine Alfredo', 'Creamy pasta dish', 12.99, true, 2),
-  ('item-006', 'rest-001', 'cat-003', 'Coca Cola', 'Soft drink', 2.99, true, 1),
-  ('item-007', 'rest-001', 'cat-003', 'Iced Tea', 'Refreshing iced tea', 2.99, true, 2),
-  ('item-008', 'rest-001', 'cat-003', 'Orange Juice', 'Fresh orange juice', 3.99, true, 3),
-  ('item-009', 'rest-001', 'cat-004', 'Tiramisu', 'Italian dessert', 5.99, true, 1),
-  ('item-010', 'rest-001', 'cat-004', 'Chocolate Cake', 'Rich chocolate cake', 4.99, true, 2)
-ON CONFLICT DO NOTHING;
+INSERT INTO categories (id, restaurant_id, name, sort_order, is_active, created_at, updated_at)
+VALUES
+  ('cat_pizza_demo', 'rest_demo_001', 'Pizza', 1, TRUE, NOW(), NOW()),
+  ('cat_drinks_demo', 'rest_demo_001', 'Drinks', 2, TRUE, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO menu_items (
+  id,
+  restaurant_id,
+  category_id,
+  name,
+  description,
+  price,
+  image_url,
+  is_available,
+  display_order,
+  options_json,
+  created_at,
+  updated_at
+) VALUES
+  (
+    'item_margherita_demo',
+    'rest_demo_001',
+    'cat_pizza_demo',
+    'Margherita Pizza',
+    'Classic pizza with tomato and mozzarella',
+    129000,
+    '',
+    TRUE,
+    1,
+    '[{"name":"Size","values":[{"label":"M","price":0},{"label":"L","price":20000}]}]'::jsonb,
+    NOW(),
+    NOW()
+  ),
+  (
+    'item_pepperoni_demo',
+    'rest_demo_001',
+    'cat_pizza_demo',
+    'Pepperoni Pizza',
+    'Pepperoni and cheese',
+    149000,
+    '',
+    TRUE,
+    2,
+    '[]'::jsonb,
+    NOW(),
+    NOW()
+  ),
+  (
+    'item_iced_tea_demo',
+    'rest_demo_001',
+    'cat_drinks_demo',
+    'Iced Tea',
+    'Refreshing iced tea',
+    29000,
+    '',
+    TRUE,
+    3,
+    '[{"name":"Sugar","values":[{"label":"100%","price":0},{"label":"50%","price":0},{"label":"0%","price":0}]}]'::jsonb,
+    NOW(),
+    NOW()
+  )
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO vouchers (
+  id,
+  restaurant_id,
+  code,
+  name,
+  type,
+  value,
+  min_order_value,
+  max_discount_amount,
+  is_active,
+  created_at,
+  updated_at
+) VALUES
+  ('voucher_welcome_demo', 'rest_demo_001', 'WELCOME10', 'Giam 10% hoa don', 'percent', 10, 100000, 50000, TRUE, NOW(), NOW()),
+  ('voucher_coffee_demo', 'rest_demo_001', 'COFFEE25K', 'Giam 25.000 VND', 'fixed', 25000, 120000, 25000, TRUE, NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;

@@ -1,254 +1,117 @@
 # QR Order Management System - Setup Guide
 
-A complete restaurant ordering system where customers scan QR codes on tables to place orders, staff manages orders, and owners track analytics.
+## Tong quan
 
-## Features
+Repo hien tai chay theo mo hinh:
 
-### Customer Features
-- Scan QR code on table to access menu
-- Browse menu by categories
-- Add items to cart with quantity
-- Add special requests/notes
-- Place order and receive confirmation
-- Track order status
+- `Frontend`: Next.js App Router, dong vai tro UI client
+- `Backend`: Node.js HTTP server, xu ly auth, order, payment, analytics
+- `PostgreSQL`: datastore chinh
 
-### Staff Features
-- View all pending and in-progress orders
-- Update order status (pending → in progress → completed)
-- Table status overview map
-- Process payments (Cash, Card, Mobile Money, Bank Transfer)
-- Real-time order updates
+Frontend khong con dung Supabase Auth hay `localStorage` lam session chinh cho staff/owner. Session dang nhap duoc cap boi backend bang access token + refresh token trong cookie.
 
-### Owner Features
-- Dashboard with KPIs (total orders, revenue, completed orders, avg order value)
-- Analytics charts (top-selling items, payment methods)
-- Menu management (add, edit, delete items)
-- QR code generation and management for tables
-- Restaurant settings management
+## 1. Chuan bi PostgreSQL
 
-## Technology Stack
+Tao database:
 
-- **Frontend**: Next.js 16, React 19, Tailwind CSS 4, shadcn/ui
-- **Backend**: Next.js API Routes
-- **Database**: PostgreSQL (via Supabase)
-- **Authentication**: Supabase Auth
-- **Charts**: Recharts
-- **QR Codes**: qrcode.react
-
-## Setup Instructions
-
-### 1. Database Setup
-
-The database schema is created automatically by running the migration scripts.
-
-**Migration files:**
-- `scripts/01-init-schema.sql` - Creates all tables with RLS policies
-- `scripts/02-sample-data.sql` - Adds sample data for testing
-
-### 2. Environment Variables
-
-Add the following to your `.env.local`:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```sql
+CREATE DATABASE qr_ordering;
 ```
 
-### 3. Installation
+Schema va seed:
+
+- `Frontend/scripts/01-init-schema.sql`
+- `Frontend/scripts/02-sample-data.sql`
+
+Backend se tu init schema neu database rong. Seed mau duoc dong bo tu runtime backend.
+
+## 2. Cau hinh env
+
+### Backend
+
+Tao `Backend/.env` tu `Backend/.env.example`:
+
+```env
+APP_ENV=development
+PORT=4000
+CORS_ORIGIN=http://localhost:3000
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/qr_ordering
+ACCESS_TOKEN_SECRET=replace-with-long-random-string
+REFRESH_TOKEN_SECRET=replace-with-long-random-string
+REALTIME_TOKEN_SECRET=replace-with-long-random-string
+PAYMENT_IPN_SECRET=replace-with-long-random-string
+SESSION_COOKIE_SECURE=false
+```
+
+### Frontend
+
+Tao `Frontend/.env.local` tu `Frontend/.env.example`:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+```
+
+## 3. Cai dat va chay
+
+### Backend
 
 ```bash
-pnpm install
-pnpm dev
+cd Backend
+npm install
+npm run dev
 ```
 
-## Database Schema
+### Frontend
 
-### Users Table
-- `id` - UUID (Primary Key)
-- `email` - User email
-- `name` - User full name
-- `role` - 'customer', 'staff', or 'owner'
-- `restaurant_id` - Reference to restaurant (for staff and owner)
-- `created_at` - Timestamp
-
-### Restaurants Table
-- `id` - UUID (Primary Key)
-- `name` - Restaurant name
-- `owner_id` - Reference to owner user
-- `address` - Restaurant address
-- `phone` - Restaurant phone
-- `created_at` - Timestamp
-
-### Dining Tables Table
-- `id` - UUID (Primary Key)
-- `restaurant_id` - Reference to restaurant
-- `table_number` - Table identifier
-- `capacity` - Seating capacity
-- `status` - 'available' or 'occupied'
-
-### Menu Categories Table
-- `id` - UUID (Primary Key)
-- `restaurant_id` - Reference to restaurant
-- `name` - Category name (Pizza, Pasta, Drinks, etc.)
-- `description` - Category description
-- `display_order` - Sort order
-
-### Menu Items Table
-- `id` - UUID (Primary Key)
-- `restaurant_id` - Reference to restaurant
-- `category_id` - Reference to category
-- `name` - Item name
-- `description` - Item description
-- `price` - Item price
-- `is_available` - Availability status
-- `display_order` - Sort order
-
-### Orders Table
-- `id` - UUID (Primary Key)
-- `restaurant_id` - Reference to restaurant
-- `table_id` - Reference to dining table
-- `user_id` - Customer user ID
-- `status` - 'pending', 'in_progress', 'completed', 'cancelled'
-- `total_amount` - Order total
-- `special_requests` - Customer notes
-- `created_at` - Order timestamp
-
-### Order Items Table
-- `id` - UUID (Primary Key)
-- `order_id` - Reference to order
-- `menu_item_id` - Reference to menu item
-- `quantity` - Item quantity
-- `special_instructions` - Special instructions for item
-- `price_at_order` - Price at time of order
-
-### Payments Table
-- `id` - UUID (Primary Key)
-- `order_id` - Reference to order
-- `payment_method` - 'cash', 'card', 'momo', 'bank_transfer'
-- `amount` - Payment amount
-- `status` - 'pending' or 'completed'
-- `paid_at` - Payment timestamp
-
-## Authentication Flow
-
-### Customer Registration/Login
-```
-/signup → Create account with 'customer' role → /login → /customer dashboard
+```bash
+cd Frontend
+npm install
+npm run dev
 ```
 
-### Staff Registration/Login
-```
-/signup → Create account with 'staff' role + restaurant ID → /login → /staff dashboard
-```
+## 4. Tai khoan demo
 
-### Owner Registration/Login
-```
-/signup → Create account with 'owner' role → /login → /owner dashboard
-```
+- Owner:
+  - `owner@example.com`
+  - `123456`
+- Staff:
+  - `staff@example.com`
+  - `123456`
 
-## QR Code Format
+## 5. Route chinh
 
-QR codes contain the following data:
-```
-{restaurantId}|table_{tableNumber}
-```
+- `/`
+- `/customer?token=<qr_token>`
+- `/login`
+- `/signup`
+- `/staff`
+- `/owner`
+- `/owner/qr-codes`
 
-Example: `rest-001|table_5`
+## 6. Kiem tra nhanh
 
-When scanned, this directs customers to the ordering page for that specific table.
+### Customer
 
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/signup` - User registration
-- `POST /api/auth/signin` - User login
-
-### Menu
-- `GET /api/menu?restaurant_id={id}` - Get menu categories and items
-
-### Orders
-- `POST /api/orders` - Create new order
-- `GET /api/orders?user_id={id}&restaurant_id={id}` - Get customer orders
+1. Vao `/customer?token=qrtoken_demo_001`
+2. Chon mon, tao order
+3. Gui yeu cau thanh toan
 
 ### Staff
-- `GET /api/staff/orders?restaurant_id={id}` - Get restaurant orders
-- `PATCH /api/staff/orders` - Update order status
-- `GET /api/staff/tables?restaurant_id={id}` - Get table status
 
-### Payments
-- `POST /api/payments` - Process payment
-- `GET /api/payments?order_id={id}` - Get payment info
+1. Dang nhap voi `staff@example.com`
+2. Vao `/staff`
+3. Xem order moi qua SSE
+4. Cap nhat trang thai va thanh toan
 
 ### Owner
-- `GET /api/owner/analytics?restaurant_id={id}` - Get analytics data
-- `GET /api/owner/menu?restaurant_id={id}` - Get menu items
-- `POST /api/owner/menu` - Add menu item or category
-- `PATCH /api/owner/menu` - Update menu item
-- `DELETE /api/owner/menu?item_id={id}` - Delete menu item
 
-## Page Routes
+1. Dang nhap voi `owner@example.com`
+2. Vao `/owner`
+3. Kiem tra dashboard, menu, category, staff
+4. Vao `/owner/qr-codes` de quan ly ban va QR
 
-### Public Pages
-- `/` - Home page with login/signup options
-- `/login` - Login page
-- `/signup` - Signup page
+## 7. Ghi chu hien trang
 
-### Customer Routes
-- `/customer` - Customer ordering dashboard with QR scanner
-
-### Staff Routes
-- `/staff` - Staff order management and table overview
-
-### Owner Routes
-- `/owner` - Owner dashboard with analytics
-- `/owner/qr-codes` - QR code generation for tables
-
-## Testing the Application
-
-### Test as Customer
-1. Sign up with role "customer"
-2. Go to `/customer`
-3. Scan QR code: `rest-001|table_1`
-4. Browse menu and place order
-
-### Test as Staff
-1. Sign up with role "staff" and restaurant ID `rest-001`
-2. Go to `/staff`
-3. View pending orders and update status
-4. Process payments
-
-### Test as Owner
-1. Sign up with role "owner"
-2. Go to `/owner`
-3. View dashboard analytics
-4. Go to `/owner/qr-codes`
-5. Generate QR codes for tables
-
-## Security Features
-
-- Password hashing with bcryptjs
-- Row Level Security (RLS) policies on all tables
-- Protected API routes with authentication
-- Session management with localStorage
-- SQL injection prevention with parameterized queries
-- Role-based access control
-
-## Development Notes
-
-- The app uses localStorage for session management
-- Real-time order updates use 5-second polling
-- QR codes are generated client-side
-- Analytics data is cached per session
-- All prices are stored as decimal values for accuracy
-
-## Future Enhancements
-
-- WebSocket for real-time notifications
-- Advanced analytics with date range filtering
-- Multiple restaurant management for owners
-- Staff scheduling and shift management
-- Inventory management
-- Push notifications for orders
-- Mobile app version
-- Multi-language support
-- Integration with payment gateways
+- Realtime hien tai dang dung SSE, chua phai WebSocket/Socket.IO
+- Payment gateway hien tai la demo flow/IPN mock, chua phai provider production
+- Backend can co mot PostgreSQL instance dang chay thi moi verify duoc end-to-end

@@ -3,11 +3,14 @@ const { URL } = require('url')
 const { PORT } = require('./config')
 const { sendJson } = require('./utils/http')
 const { routeRequest } = require('./routes')
+const { initStore } = require('./data/store')
 
-function startServer() {
+async function startServer() {
+  await initStore()
+
   const server = http.createServer(async (req, res) => {
     if (req.method === 'OPTIONS') {
-      sendJson(res, 200, { ok: true })
+      sendJson(res, 200, { ok: true }, {}, req)
       return
     }
 
@@ -17,7 +20,7 @@ function startServer() {
       await routeRequest(req, res, url)
     } catch (error) {
       console.error(error)
-      sendJson(res, 500, { error: 'Internal server error' })
+      sendJson(res, 500, { error: 'Internal server error' }, {}, req)
     }
   })
 

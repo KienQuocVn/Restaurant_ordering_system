@@ -1,7 +1,10 @@
 export function apiUrl(path: string) {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '') ||
-    'http://localhost:4000'
+  const envBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '')
+  const browserBaseUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.protocol}//${window.location.hostname}:4000`
+      : 'http://localhost:4000'
+  const baseUrl = envBaseUrl || browserBaseUrl
 
   if (path.startsWith('http://') || path.startsWith('https://')) {
     return path
@@ -20,52 +23,121 @@ export interface AuthUser {
   created_at: string
 }
 
-export function getStoredUser(): AuthUser | null {
-  if (typeof window === 'undefined') return null
-  const raw = window.localStorage.getItem('user')
-  if (!raw) return null
+export interface AuthSession {
+  user: AuthUser
+  realtimeToken: string
+  accessTokenExpiresIn: number
+  realtimeTokenExpiresIn: number
+}
 
-  try {
-    return JSON.parse(raw) as AuthUser
-  } catch {
-    return null
+let authSessionCache: AuthSession | null = null
+let refreshPromise: Promise<boolean> | null = null
+
+async function refreshAccessToken() {
+  if (refreshPromise) return refreshPromise
+
+  refreshPromise = fetch(apiUrl('/api/auth/refresh'), {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        authSessionCache = null
+        return false
+      }
+      const data = (await response.json()) as { success: boolean } & AuthSession
+      authSessionCache = data.success ? data : null
+      return Boolean(data.success)
+    })
+    .catch(() => {
+      authSessionCache = null
+      return false
+    })
+    .finally(() => {
+      refreshPromise = null
+    })
+
+  return refreshPromise
+}
+
+export async function getSession(forceRefresh = false): Promise<AuthSession | null> {
+  if (!forceRefresh && authSessionCache) return authSessionCache
+
+  const response = await fetch(apiUrl('/api/auth/session'), {
+    credentials: 'include',
+  })
+
+  if (response.ok) {
+    const data = (await response.json()) as { success: boolean } & AuthSession
+    authSessionCache = data.success ? data : null
+    return authSessionCache
+  }
+
+  if (response.status === 401) {
+    const refreshed = await refreshAccessToken()
+    if (!refreshed) return null
+    return authSessionCache
+  }
+
+  return null
+}
+
+export async function getStoredUser(): Promise<AuthUser | null> {
+  const session = await getSession()
+  return session?.user || null
+}
+
+export async function getStoredRealtimeToken(): Promise<string | null> {
+  const session = await getSession()
+  return session?.realtimeToken || null
+}
+
+export function storeAuthSession(session: Partial<AuthSession> & { user: AuthUser }) {
+  authSessionCache = {
+    user: session.user,
+    realtimeToken: session.realtimeToken || authSessionCache?.realtimeToken || '',
+    accessTokenExpiresIn:
+      session.accessTokenExpiresIn || authSessionCache?.accessTokenExpiresIn || 0,
+    realtimeTokenExpiresIn:
+      session.realtimeTokenExpiresIn || authSessionCache?.realtimeTokenExpiresIn || 0,
   }
 }
 
-export function getStoredToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return window.localStorage.getItem('auth_token')
-}
-
-export function storeAuthSession(user: AuthUser, token: string) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem('user', JSON.stringify(user))
-  window.localStorage.setItem('auth_token', token)
-}
-
 export function clearAuthSession() {
-  if (typeof window === 'undefined') return
-  window.localStorage.removeItem('user')
-  window.localStorage.removeItem('auth_token')
+  authSessionCache = null
+  fetch(apiUrl('/api/auth/signout'), {
+    method: 'POST',
+    credentials: 'include',
+  }).catch(() => {})
 }
 
-export async function apiFetch(path: string, init: RequestInit = {}, requiresAuth = false) {
+export async function apiFetch(
+  path: string,
+  init: RequestInit = {},
+  requiresAuth = false
+) {
   const headers = new Headers(init.headers || {})
   if (!headers.has('Content-Type') && init.body) {
     headers.set('Content-Type', 'application/json')
   }
 
-  if (requiresAuth) {
-    const token = getStoredToken()
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`)
+  const execute = () =>
+    fetch(apiUrl(path), {
+      ...init,
+      headers,
+      credentials: 'include',
+    })
+
+  let response = await execute()
+
+  if (requiresAuth && response.status === 401) {
+    const refreshed = await refreshAccessToken()
+    if (refreshed) {
+      response = await execute()
     }
   }
 
-  return fetch(apiUrl(path), {
-    ...init,
-    headers,
-  })
+  return response
 }
 
 export function formatCurrency(amount: number) {

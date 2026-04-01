@@ -49,6 +49,7 @@ const defaultAnalytics = {
     customerCount: 0,
     servedTables: 0,
     averageServiceMinutes: 0,
+    totalDiscount: 0,
   },
   topSellingItems: [],
   paymentMethods: {},
@@ -70,25 +71,44 @@ export default function OwnerPage() {
   const [orders, setOrders] = useState<any[]>([])
   const [staff, setStaff] = useState<any[]>([])
   const [activityLogs, setActivityLogs] = useState<any[]>([])
+  const [reconciliation, setReconciliation] = useState<any>({
+    summary: {
+      totalTransactions: 0,
+      successfulTransactions: 0,
+      pendingTransactions: 0,
+      mismatchedTransactions: 0,
+      totalCollected: 0,
+    },
+    payments: [],
+  })
+  const [vouchers, setVouchers] = useState<any[]>([])
 
   useEffect(() => {
-    const parsedUser = getStoredUser()
-    if (!parsedUser) {
-      router.push('/login')
-      return
-    }
+    let cancelled = false
 
-    if (parsedUser.role !== 'owner') {
-      router.push('/')
-      return
-    }
-    if (!parsedUser.restaurant_id) {
-      router.push('/login')
-      return
-    }
+    getStoredUser().then((parsedUser) => {
+      if (cancelled) return
+      if (!parsedUser) {
+        router.push('/login')
+        return
+      }
 
-    setUser(parsedUser)
-    loadAll(parsedUser.restaurant_id, analyticsRange)
+      if (parsedUser.role !== 'owner') {
+        router.push('/')
+        return
+      }
+      if (!parsedUser.restaurant_id) {
+        router.push('/login')
+        return
+      }
+
+      setUser(parsedUser)
+      loadAll(parsedUser.restaurant_id, analyticsRange)
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [router])
 
   const loadAll = async (restaurantId: string, range: AnalyticsRange) => {
@@ -97,6 +117,8 @@ export default function OwnerPage() {
       loadMenu(restaurantId),
       loadOrders(restaurantId),
       loadStaff(restaurantId),
+      loadReconciliation(restaurantId),
+      loadVouchers(restaurantId),
     ])
   }
 
@@ -166,9 +188,73 @@ export default function OwnerPage() {
     }
   }
 
+  const loadReconciliation = async (restaurantId: string) => {
+    try {
+      const response = await apiFetch(
+        `/api/owner/reconciliation?restaurant_id=${restaurantId}`,
+        {},
+        true
+      )
+      if (!response.ok) throw new Error('Failed to load reconciliation')
+      const data = await response.json()
+      setReconciliation(data)
+    } catch (err) {
+      console.error('Error loading reconciliation:', err)
+    }
+  }
+
+  const loadVouchers = async (restaurantId: string) => {
+    try {
+      const response = await apiFetch(
+        `/api/owner/vouchers?restaurant_id=${restaurantId}`,
+        {},
+        true
+      )
+      if (!response.ok) throw new Error('Failed to load vouchers')
+      const data = await response.json()
+      setVouchers(data || [])
+    } catch (err) {
+      console.error('Error loading vouchers:', err)
+    }
+  }
+
   const refreshAnalytics = async () => {
     if (user) {
       await loadAnalytics(user.restaurant_id, analyticsRange)
+    }
+  }
+
+  const handleCreateVoucher = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!user) return
+    const formData = new FormData(event.currentTarget)
+    setLoading(true)
+    try {
+      const response = await apiFetch(
+        '/api/owner/vouchers',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            restaurantId: user.restaurant_id,
+            code: formData.get('code'),
+            name: formData.get('name'),
+            type: formData.get('type'),
+            value: Number(formData.get('value') || 0),
+            minOrderValue: Number(formData.get('minOrderValue') || 0),
+            maxDiscountAmount: formData.get('maxDiscountAmount') || null,
+          }),
+        },
+        true
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to create voucher')
+      ;(event.target as HTMLFormElement).reset()
+      loadVouchers(user.restaurant_id)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to create voucher')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -675,7 +761,7 @@ export default function OwnerPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="bg-white rounded-lg p-6 border">
                 <p className="text-sm text-gray-600 mb-1">Total Orders</p>
                 <p className="text-3xl font-bold text-[#2ad38b]">
@@ -709,6 +795,14 @@ export default function OwnerPage() {
                   Avg {analytics.stats.averageServiceMinutes.toFixed(1)} min/session
                 </p>
               </div>
+
+              <div className="bg-white rounded-lg p-6 border">
+                <p className="text-sm text-gray-600 mb-1">Discount Applied</p>
+                <p className="text-3xl font-bold text-rose-600">
+                  {formatCurrency(analytics.stats.totalDiscount || 0)}
+                </p>
+                <p className="text-xs text-gray-500 mt-2">Voucher / giam gia theo ky</p>
+              </div>
             </div>
 
             <AnalyticsCharts
@@ -716,6 +810,86 @@ export default function OwnerPage() {
               paymentMethods={analytics.paymentMethods}
               revenueByDate={analytics.revenueByDate}
             />
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg border p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">Payment Reconciliation</h3>
+                  <Button variant="outline" onClick={() => loadReconciliation(user.restaurant_id)}>
+                    Refresh
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded border bg-gray-50 p-3">
+                    <p className="text-xs text-gray-500">Total</p>
+                    <p className="text-xl font-semibold">{reconciliation.summary.totalTransactions}</p>
+                  </div>
+                  <div className="rounded border bg-gray-50 p-3">
+                    <p className="text-xs text-gray-500">Pending</p>
+                    <p className="text-xl font-semibold text-amber-600">
+                      {reconciliation.summary.pendingTransactions}
+                    </p>
+                  </div>
+                  <div className="rounded border bg-gray-50 p-3">
+                    <p className="text-xs text-gray-500">Mismatch</p>
+                    <p className="text-xl font-semibold text-red-600">
+                      {reconciliation.summary.mismatchedTransactions}
+                    </p>
+                  </div>
+                  <div className="rounded border bg-gray-50 p-3">
+                    <p className="text-xs text-gray-500">Collected</p>
+                    <p className="text-xl font-semibold text-emerald-600">
+                      {formatCurrency(reconciliation.summary.totalCollected)}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2 max-h-80 overflow-auto">
+                  {reconciliation.payments.slice(0, 10).map((payment: any) => (
+                    <div key={payment.id} className="rounded border p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium">
+                          Ban {payment.table_number ?? '-'} / {payment.method}
+                        </span>
+                        <span
+                          className={
+                            payment.matched ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'
+                          }
+                        >
+                          {payment.matched ? 'matched' : 'check'}
+                        </span>
+                      </div>
+                      <p className="text-gray-500">
+                        Session: {formatCurrency(payment.session_total)} | Thu: {formatCurrency(payment.received_amount)}
+                      </p>
+                      <p className="text-gray-500">
+                        Voucher: {payment.voucher_code || 'khong co'} | Status: {payment.status}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg border p-6 space-y-4">
+                <h3 className="text-lg font-bold">Active Vouchers</h3>
+                <div className="space-y-2 max-h-52 overflow-auto">
+                  {vouchers.length === 0 ? (
+                    <p className="text-sm text-gray-500">Chua co voucher nao.</p>
+                  ) : (
+                    vouchers.map((voucher) => (
+                      <div key={voucher.id} className="rounded border p-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{voucher.code}</span>
+                          <span className={voucher.is_active ? 'text-emerald-600' : 'text-gray-400'}>
+                            {voucher.is_active ? 'active' : 'inactive'}
+                          </span>
+                        </div>
+                        <p className="text-gray-600">{voucher.name}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="menu">
@@ -790,6 +964,23 @@ export default function OwnerPage() {
                   <p className="text-sm text-gray-600">{user.email}</p>
                 </div>
               </div>
+              <form onSubmit={handleCreateVoucher} className="pt-4 border-t space-y-3">
+                <h3 className="font-semibold">Create Voucher</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input name="code" placeholder="Code" className="rounded border px-3 py-2 text-sm" />
+                  <input name="name" placeholder="Ten voucher" className="rounded border px-3 py-2 text-sm" />
+                  <select name="type" className="rounded border px-3 py-2 text-sm">
+                    <option value="percent">Percent</option>
+                    <option value="fixed">Fixed amount</option>
+                  </select>
+                  <input name="value" type="number" min="1" placeholder="Gia tri" className="rounded border px-3 py-2 text-sm" />
+                  <input name="minOrderValue" type="number" min="0" placeholder="Don toi thieu" className="rounded border px-3 py-2 text-sm" />
+                  <input name="maxDiscountAmount" type="number" min="0" placeholder="Tran giam (tuy chon)" className="rounded border px-3 py-2 text-sm" />
+                </div>
+                <Button className="bg-[#2ad38b] hover:bg-[#0cceb0]" disabled={loading}>
+                  Tao Voucher
+                </Button>
+              </form>
               <div className="pt-4 border-t">
                 <Button
                   variant="destructive"

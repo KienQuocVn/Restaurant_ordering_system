@@ -43,24 +43,32 @@ export default function QRCodesPage() {
 
   // Check if user is logged in and is owner
   useEffect(() => {
-    const parsedUser = getStoredUser()
-    if (!parsedUser) {
-      router.push('/login')
-      return
-    }
+    let cancelled = false
 
-    if (parsedUser.role !== 'owner') {
-      router.push('/')
-      return
-    }
-    if (!parsedUser.restaurant_id) {
-      router.push('/login')
-      return
-    }
+    getStoredUser().then((parsedUser) => {
+      if (cancelled) return
+      if (!parsedUser) {
+        router.push('/login')
+        return
+      }
 
-    setUser(parsedUser)
-    loadTables(parsedUser.restaurant_id)
-  }, [])
+      if (parsedUser.role !== 'owner') {
+        router.push('/')
+        return
+      }
+      if (!parsedUser.restaurant_id) {
+        router.push('/login')
+        return
+      }
+
+      setUser(parsedUser)
+      loadTables(parsedUser.restaurant_id)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [router])
 
   const loadTables = async (restaurantId: string) => {
     try {
@@ -374,16 +382,31 @@ export default function QRCodesPage() {
                 </p>
               ) : (
                 tables.map((table) => (
-                  <button
-                    key={table.id}
-                    onClick={() => {
-                      setSelectedTable(table)
-                      setEditingTable(table)
-                    }}
-                    className="p-4 bg-white rounded-lg border-2 border-gray-300 hover:border-[#2ad38b] hover:bg-green-50 transition-colors font-medium text-center"
-                  >
-                    Table {table.table_number}
-                  </button>
+                  (() => {
+                    const statusColors: Record<string, string> = {
+                      empty: 'border-gray-300 bg-white',
+                      occupied: 'border-sky-300 bg-sky-50',
+                      payment_requested: 'border-orange-300 bg-orange-50',
+                      payment_pending: 'border-purple-300 bg-purple-50',
+                    }
+                    return (
+                      <button
+                        key={table.id}
+                        onClick={() => {
+                          setSelectedTable(table)
+                          setEditingTable(table)
+                        }}
+                        className={`rounded-lg border-2 p-4 text-center font-medium transition-colors hover:border-[#2ad38b] ${
+                          statusColors[table.status || 'empty'] || statusColors.empty
+                        }`}
+                      >
+                        <p>Table {table.table_number}</p>
+                        <p className="mt-1 text-xs uppercase text-gray-500">
+                          {(table.status || 'empty').replace('_', ' ')}
+                        </p>
+                      </button>
+                    )
+                  })()
                 ))
               )}
             </div>

@@ -18,17 +18,24 @@ export default function HomePage() {
   useEffect(() => {
     if (!mounted) return
 
-    const storedUser = getStoredUser()
-    if (storedUser) {
-      setUser(storedUser)
-      
-      if (storedUser.role === 'staff') {
-        router.push('/staff')
-      } else if (storedUser.role === 'owner') {
-        router.push('/owner')
+    let cancelled = false
+
+    getStoredUser().then((storedUser) => {
+      if (cancelled) return
+      if (storedUser) {
+        setUser(storedUser)
+        if (storedUser.role === 'staff') {
+          router.push('/staff')
+        } else if (storedUser.role === 'owner') {
+          router.push('/owner')
+        }
+      } else {
+        setLoading(false)
       }
-    } else {
-      setLoading(false)
+    })
+
+    return () => {
+      cancelled = true
     }
   }, [mounted, router])
 

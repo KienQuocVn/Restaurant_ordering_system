@@ -80,9 +80,7 @@ export function AnalyticsCharts({
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, value }) =>
-                    `${name}: $${value.toFixed(2)}`
-                  }
+                  label={({ name, value }) => `${name}: ${formatCurrency(Number(value || 0))}`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
@@ -94,9 +92,7 @@ export function AnalyticsCharts({
                     />
                   ))}
                 </Pie>
-                <Tooltip
-                  formatter={(value) => `$${(value as number).toFixed(2)}`}
-                />
+                <Tooltip formatter={(value) => formatCurrency(Number(value || 0))} />
               </PieChart>
             </ResponsiveContainer>
           )}

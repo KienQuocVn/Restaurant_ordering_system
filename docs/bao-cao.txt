@@ -1,91 +1,126 @@
-BÁO CÁO ĐỊNH HƯỚNG DỰ ÁN
-HỆ THỐNG ĐẶT MÓN QUA QR CODE CHO NHÀ HÀNG / QUÁN ĂN / QUÁN CÀ PHÊ
+BAO CAO DINH HUONG DU AN
+HE THONG DAT MON QUA QR CODE CHO NHA HANG / QUAN AN / QUAN CAFE
 
-Phiên bản cập nhật: 2026-04-01
+Phien ban cap nhat: 2026-04-01
 
-1. Mục tiêu hiện tại của dự án
+1. Muc tieu hien tai cua du an
 
-Dự án đang được phát triển theo hướng web app QR ordering dùng cho 3 nhóm người dùng:
-- Khách hàng: quét QR, xem menu, chọn món, đặt nhiều lần trong cùng phiên bàn, yêu cầu thanh toán.
-- Nhân viên: theo dõi order mới, xem trạng thái bàn, xử lý order, in phiếu bếp và hỗ trợ thanh toán.
-- Chủ quán/Admin: quản lý menu, danh mục, bàn, QR, nhân viên và theo dõi dashboard vận hành.
+Du an dang di theo huong web app QR ordering co the chay local theo mo hinh frontend va backend tach rieng, trong do:
+- Khach quet QR, xem menu, dat nhieu lan trong cung session ban va gui yeu cau thanh toan.
+- Nhan vien theo doi order moi gan realtime, xu ly trang thai order va thanh toan.
+- Chu quan quan ly menu, category, ban, QR, nhan vien, voucher va dashboard tong hop.
 
-Mục tiêu ngắn hạn của codebase hiện tại là hoàn thiện MVP có thể chạy nội bộ:
-- Frontend tách riêng bằng Next.js.
-- Backend tách riêng bằng Node.js.
-- Dữ liệu được lưu qua lớp database cục bộ thay vì chỉ phụ thuộc mock API.
-- Tăng độ an toàn cho khu staff/owner bằng JWT và route guard phía server.
+Muc tieu ngan han cua codebase hien tai:
+- Giu frontend Next.js va backend Node.js doc lap.
+- Chuyen nen du lieu sang PostgreSQL lam datastore chinh.
+- Chot mot schema duy nhat dung chung cho docs, SQL va backend runtime.
+- Dung cookie-first auth cho staff/owner voi access token + refresh token + session luu phia server.
 
-2. Hướng kiến trúc hiện tại
+2. Huong kien truc hien tai
 
 Frontend:
-- Next.js App Router trong thư mục `Frontend`
-- Vai trò public/customer tại `/customer`
-- Vai trò staff tại `/staff`
-- Vai trò owner tại `/owner` và `/owner/qr-codes`
-- Frontend gọi backend độc lập qua `NEXT_PUBLIC_API_BASE_URL`
+- Next.js App Router trong thu muc Frontend
+- Customer tai /customer
+- Staff tai /staff
+- Owner tai /owner va /owner/qr-codes
+- Frontend goi backend doc lap qua NEXT_PUBLIC_API_BASE_URL
 
 Backend:
-- HTTP server Node.js trong thư mục `Backend`
-- Route nghiệp vụ tập trung ở `Backend/src/routes/index.js`
-- Service xử lý nghiệp vụ ở `Backend/src/services/business.js`
-- Dữ liệu được đồng bộ qua SQLite cục bộ tại `Backend/data/store.db`
-- Vẫn giữ JSON snapshot `Backend/data/store.json` để seed và dễ kiểm tra dữ liệu
+- HTTP server Node.js trong thu muc Backend
+- Route nghiep vu tap trung o Backend/src/routes/index.js
+- Service nghiep vu o Backend/src/services/business.js
+- Data store runtime dong bo vao PostgreSQL
+- Co the xuat JSON snapshot de debug, nhung khong con dung JSON/SQLite lam datastore chinh
 
-3. Trạng thái triển khai sau khi cập nhật
+Database PostgreSQL:
+- Schema chot tai Frontend/scripts/01-init-schema.sql
+- Seed mau khop schema tai Frontend/scripts/02-sample-data.sql
+- Co bang auth_sessions de quan ly refresh token/session server-side
 
-Các hạng mục đã được đưa vào code:
-- Kết nối database cục bộ bằng SQLite qua `node:sqlite`
-- Tự seed dữ liệu demo nếu chưa có dữ liệu
-- JWT cho đăng nhập staff/owner
-- Authorization guard cho các API staff/owner
-- Frontend staff/owner gửi Bearer token khi gọi API
-- Frontend customer hỗ trợ chọn option/topping của món khi menu có cấu hình
-- Owner có thể cấu hình category, image URL, option/topping cho món ăn ngay trên giao diện quản trị
+3. Nhung huong da duoc cua ban cap nhat nay
 
-4. Hướng đi tiếp theo nên ưu tiên
+Da bo sung va nang cap:
+- Chuyen backend sang PostgreSQL thay cho SQLite/JSON lam nguon du lieu chinh
+- Chuan hoa schema theo cac bang:
+  - users
+  - restaurants
+  - tables
+  - categories
+  - menu_items
+  - vouchers
+  - sessions
+  - orders
+  - order_items
+  - payments
+  - activity_logs
+  - auth_sessions
+- Chuan hoa field nguoi dung ve full_name va dong bo name trong runtime
+- Chuan hoa cac status quan trong:
+  - order: pending, acknowledged, sent_to_kitchen, preparing, completed, cancelled
+  - payment: pending, success, failed, refunded
+  - table: empty, occupied, payment_requested, payment_pending, out_of_service
+  - session: active, payment_requested, payment_pending, paid
+- Auth client va server chuyen sang huong cookie-first dung nghia:
+  - access token cookie httpOnly
+  - refresh token cookie httpOnly
+  - session phia server trong auth_sessions
+  - endpoint session va refresh rieng
+- Loai bo phu thuoc runtime vao Supabase Auth va localStorage lam session chinh
+- Seed data da khop schema PostgreSQL va khop backend runtime hien tai
 
-Ưu tiên 1:
-- Chuẩn hóa schema cuối cùng giữa tài liệu, SQL migration và backend runtime
-- Chốt rõ chọn SQLite tạm thời hay chuyển hẳn sang PostgreSQL production
+4. Dinh huong uu tien tiep theo
 
-Ưu tiên 2:
-- Bổ sung realtime bằng WebSocket/Socket.IO cho staff và bếp
-- Có âm thanh/thông báo order mới
+Uu tien 1:
+- Hoan thien WebSocket / Socket.IO hai chieu thay cho SSE MVP
 
-Ưu tiên 3:
-- Hoàn thiện luồng thanh toán production:
-  - VietQR động chuẩn
-  - IPN/callback
-  - đối soát giao dịch
+Uu tien 2:
+- Tiep tuc day du CRUD categories va staff theo muc production hon:
+  - validation
+  - pagination / filter
+  - audit log day du
 
-Ưu tiên 4:
-- Hoàn thiện auth production:
-  - refresh token hoặc secure cookie
-  - session management chặt hơn
-  - phân quyền sâu hơn theo từng hành động
+Uu tien 3:
+- Payment production:
+  - tich hop that su voi MoMo Business API / ngan hang
+  - mapping provider transaction id
+  - dashboard doi soat day du theo ky
 
-5. Đánh giá hiện trạng dự án
+Uu tien 4:
+- Hardening:
+  - validation
+  - migration strategy bai ban hon
+  - test integration
+  - backup / monitoring
 
-Dự án hiện tại đã đi đúng hướng MVP:
-- Có tách frontend/backend
-- Có luồng khách gọi món không cần đăng nhập
-- Có dashboard staff và owner
-- Có quản lý menu, category, staff, QR bàn
-- Có nền tảng database cục bộ thật để tiếp tục mở rộng
+5. Danh gia hien trang du an
 
-Nhưng chưa phải production-ready vì còn thiếu:
-- realtime thật
-- callback thanh toán thật
-- export báo cáo
-- xác thực phiên an toàn hơn localStorage ở phía trình duyệt
-- migration/schema chuẩn hóa hoàn toàn với tài liệu học thuật ban đầu
+Codebase hien tai da dung huong MVP mo rong:
+- Frontend/backend tach rieng
+- PostgreSQL la datastore chinh
+- Session ban, order, payment, voucher va analytics da co data model ro rang
+- Auth staff/owner da bo localStorage lam session chinh
+- Payment callback/IPN demo da co
 
-6. Kết luận ngắn
+Nhung van chua production-ready vi con thieu:
+- WebSocket / Socket.IO
+- payment gateway that su voi credentials production
+- validation/test tu dong bai ban
+- chien luoc multi-tenant va sao luu du lieu
 
-Hướng đi hiện tại của dự án là giữ phạm vi MVP thực dụng, làm chắc 3 lớp:
-- FE sử dụng được trong quán
-- BE đủ rõ ràng để mở rộng
-- DB đủ ổn định để bỏ dần mock/demo
+6. Tien do phase 0 va phase 1
 
-Sau bản cập nhật này, dự án đã tiến thêm một bước quan trọng: từ mô hình demo dùng store file đơn giản sang kiến trúc có database local, auth token và phân quyền API rõ hơn, phù hợp để tiếp tục triển khai realtime và thanh toán thật ở các vòng sau.
+Phase 0:
+- Da chot lai schema du lieu duy nhat
+- Da sua sample data va convention status
+- Da bo hardcode Supabase/Auth cu
+- Da co env mau cho backend va frontend
+
+Phase 1:
+- Backend doc lap da chay theo huong PostgreSQL
+- Co migration schema PostgreSQL va seed
+- Co auth JWT + refresh token + session server-side cho staff/owner
+- Co public API cho customer load menu, QR, session, order
+
+7. Ket luan ngan
+
+Huong di hien tai cua du an da chuyen ro sang mot MVP co nen du lieu va auth dung hon de co the tiep tuc mo rong. Viec chot schema PostgreSQL, seed that su, va bo localStorage/Supabase khoi session chinh la buoc quan trong de dua codebase ra khoi trang thai demo thu cong va sang muc co the van hanh local nghiem tuc hon.
