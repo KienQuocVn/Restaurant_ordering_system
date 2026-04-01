@@ -1,0 +1,414 @@
+
+BÁO CÁO ĐỀ CƯƠNG
+HỆ THỐNG ĐẶT MÓN THÔNG QUA MÃ QR CODE
+cho Nhà Hàng / Quán Ăn / Quán Cà Phê
+─────────────────────────────────
+Phiên bản: 1.0  |  Ngày: Tháng 4, 2026
+
+
+MỤC LỤC
+1. Tổng Quan Dự Án
+2. Phân Tích Thực Trạng & Nhu Cầu
+3. Yêu Cầu Chức Năng
+   3.1 Vai trò Khách Hàng
+   3.2 Vai trò Chủ Quán (Admin)
+   3.3 Vai trò Nhân Viên
+4. Yêu Cầu Phi Chức Năng
+5. Luồng Xử Lý Hệ Thống
+   5.1 Luồng Order từ QR đến Bếp
+   5.2 Luồng Thanh Toán MoMo / Ngân Hàng
+6. Thiết Kế Cơ Sở Dữ Liệu
+7. Kiến Trúc Hệ Thống & Công Nghệ
+   7.1 Lựa chọn nền tảng Web hay Desktop
+   7.2 Tích hợp POS
+   7.3 Realtime Order cập nhật
+8. Tích Hợp Thanh Toán
+   8.1 VietQR / Chuyển Khoản Ngân Hàng
+   8.2 MoMo Business API
+9. Quy Trình Phát Triển
+10. Kế Hoạch Triển Khai & Rủi Ro
+
+
+CHƯƠNG 1: TỔNG QUAN DỰ ÁN
+1.1 Giới Thiệu
+Phần mềm Order QR là hệ thống quản lý nhà hàng thế hệ mới, cho phép khách hàng đặt món trực tiếp qua điện thoại bằng cách quét mã QR đặt trên từng bàn, không cần tải ứng dụng, không cần tạo tài khoản. Hệ thống kết nối realtime giữa khách hàng, nhân viên phục vụ, bếp và thu ngân — tất cả trên một nền tảng duy nhất.
+
+1.2 Mục Tiêu Dự Án
+•Số hóa quy trình gọi món — loại bỏ hoàn toàn thao tác ghi tay
+•Hiển thị order realtime trên màn hình bếp và quầy thu ngân ngay khi khách bấm Đặt Món
+•Tích hợp thanh toán không tiền mặt: VietQR, MoMo, chuyển khoản ngân hàng
+•Cung cấp dashboard thống kê doanh thu, món bán chạy, hiệu suất bàn
+•Hỗ trợ máy POS hiện có tại quán — không cần thay thế phần cứng
+
+1.3 Phạm Vi Hệ Thống
+Thành Phần	Mô Tả
+Khách hàng	Quét QR → xem menu → thêm vào giỏ → đặt món (không cần app, không cần đăng nhập)
+Chủ quán (Admin)	Quản lý toàn bộ: menu, bàn, nhân viên, doanh thu, in bill, dashboard thống kê
+Nhân viên	Xem trạng thái bàn, thông tin order, thực hiện thanh toán, in phiếu bếp
+Bếp / Bar	Nhận phiếu order realtime từ màn hình KDS hoặc máy in nhiệt
+Thanh toán	Tạo QR động theo tổng tiền: MoMo, VietQR (50+ ngân hàng hỗ trợ)
+
+
+CHƯƠNG 2: PHÂN TÍCH THỰC TRẠNG & NHU CẦU
+2.1 Thực Trạng Ngành F&B Việt Nam
+Theo khảo sát thị trường 2024-2026, hầu hết các nhà hàng vừa và nhỏ tại Việt Nam vẫn sử dụng quy trình gọi món thủ công: nhân viên ghi tay hoặc nhập máy POS. Điều này dẫn đến nhiều vấn đề:
+•Sai sót trong quá trình ghi order, đặc biệt giờ cao điểm
+•Khách phải chờ nhân viên đến bàn mới gọi được món
+•Thông tin order truyền tay từ phục vụ đến bếp dễ nhầm lẫn
+•Không có dữ liệu phân tích để tối ưu menu và vận hành
+
+2.2 Xu Hướng Thị Trường
+Theo FoxiFood (2026), 70% khách hàng thích đặt món qua digital khi có lựa chọn. Hệ thống QR ordering đã trở thành tiêu chuẩn mới tại nhà hàng toàn cầu — khách quét mã, duyệt menu và đặt ngay từ điện thoại, order đi thẳng vào bếp hoặc POS mà không qua bước nhập tay.
+
+2.3 Đối Tượng Người Dùng
+Đối Tượng	Thiết Bị	Kỳ Vọng
+Khách hàng	Smartphone (iOS/Android)	Xem menu đẹp, đặt món nhanh, không cần app
+Chủ quán	PC, Laptop, Máy POS	Quản lý tổng thể, thống kê doanh thu, in bill
+Nhân viên	Tablet, PC tại quầy	Thấy ngay order mới, xử lý thanh toán nhanh
+Bếp/Bar	Màn hình bếp (KDS) hoặc máy in nhiệt	Nhận phiếu rõ ràng, theo thứ tự, realtime
+
+
+CHƯƠNG 3: YÊU CẦU CHỨC NĂNG
+3.1 Vai Trò: Khách Hàng
+Khách hàng truy cập hệ thống hoàn toàn qua trình duyệt điện thoại sau khi quét mã QR — không cài app, không đăng nhập.
+
+Mã YC	Chức Năng
+KH-01	Quét mã QR trên bàn → tự động nhận diện ID bàn, mở giao diện menu của quán
+KH-02	Xem danh sách menu phân theo danh mục (đồ uống, đồ ăn, thức ăn nhanh, combo...)
+KH-03	Xem chi tiết món: hình ảnh, mô tả, giá, tuỳ chọn kích thước/topping
+KH-04	Thêm món vào giỏ hàng, chỉnh số lượng, ghi ghi chú cho từng món
+KH-05	Xem lại giỏ hàng, chỉnh sửa trước khi xác nhận
+KH-06	Đặt món — order gửi ngay về hệ thống, hiển thị ở màn hình nhân viên & bếp
+KH-07	Xem lại các món đã order trong phiên (bàn chưa thanh toán)
+KH-08	Gọi thêm món bất kỳ lúc nào (order nhiều lần trong một phiên bàn)
+KH-09	Yêu cầu thanh toán qua giao diện (gửi tín hiệu về nhân viên)
+
+3.2 Vai Trò: Chủ Quán (Admin)
+Chủ quán đăng nhập từ PC, Laptop hoặc máy POS. Có toàn quyền quản lý hệ thống.
+
+3.2.1 Quản Lý Bàn
+•Xem sơ đồ toàn bộ bàn trong quán (màu sắc trực quan: đỏ = có khách, xanh = đang phục vụ, trắng = trống)
+•Thêm / sửa / xóa bàn, đặt tên/số bàn, phân khu (tầng 1, tầng 2, khu VIP...)
+•Tạo và in mã QR riêng cho từng bàn (PDF, PNG — dán lên bàn hoặc để trong acrylic stand)
+•Reset bàn sau khi khách thanh toán xong
+
+3.2.2 Quản Lý Menu
+•CRUD danh mục sản phẩm (category: đồ uống, đồ ăn, tráng miệng...)
+•CRUD sản phẩm: tên, hình ảnh, giá, mô tả, trạng thái bán/ngừng bán
+•Quản lý tuỳ chọn (options): size S/M/L, topping, ít đường/không đường...
+•Ẩn/hiện món tạm thời (hết nguyên liệu) không cần xóa
+•Sắp xếp thứ tự hiển thị của menu
+
+3.2.3 Quản Lý Order
+•Xem tất cả order theo bàn, theo thời gian, theo trạng thái
+•Xem chi tiết từng order: món, số lượng, ghi chú, thời gian đặt
+•In bill (phiếu tính tiền) cho khách
+•In phiếu bếp (order slip) cho bếp/bar
+•Hủy món / hủy order với ghi chú lý do
+
+3.2.4 Thanh Toán & Tài Chính
+•Xem tổng tiền từng bàn real-time
+•Áp dụng giảm giá / voucher
+•Chọn hình thức thanh toán: tiền mặt, MoMo QR, VietQR ngân hàng
+•Xem lịch sử giao dịch, đối soát thanh toán
+
+3.2.5 Dashboard & Thống Kê
+•Doanh thu theo ngày / tuần / tháng (biểu đồ cột, đường)
+•Top món bán chạy nhất
+•Số lượt khách, số bàn phục vụ, trung bình thời gian phục vụ
+•Doanh thu theo phương thức thanh toán (tiền mặt / ví điện tử)
+•Xuất báo cáo CSV / PDF
+
+3.2.6 Quản Lý Nhân Viên
+•Thêm / sửa / xóa tài khoản nhân viên
+•Phân quyền: chủ quán (full) / nhân viên (giới hạn)
+•Xem nhật ký hoạt động (ai làm gì, lúc nào)
+
+3.3 Vai Trò: Nhân Viên
+Mã YC	Chức Năng
+NV-01	Đăng nhập bằng tài khoản riêng, giao diện đơn giản hơn Admin
+NV-02	Xem sơ đồ bàn: màu trạng thái, số khách, tổng tiền hiện tại
+NV-03	Click vào bàn → xem chi tiết order: tất cả món, số lượng, ghi chú, tổng tiền
+NV-04	Nhận thông báo khi có order mới từ khách (âm thanh + hiển thị)
+NV-05	Xác nhận order đã nhận / đã chuyển bếp
+NV-06	Khi khách yêu cầu thanh toán: chọn bàn → chọn phương thức → hiển thị QR thanh toán với số tiền tự động điền
+NV-07	Hệ thống tự xác nhận khi nhận được callback thanh toán thành công
+NV-08	In bill / in phiếu bếp
+NV-09	Gọi thêm món thay khách (nếu khách không dùng điện thoại)
+
+
+CHƯƠNG 4: YÊU CẦU PHI CHỨC NĂNG
+4.1 Hiệu Năng
+•Giao diện menu tải dưới 2 giây trên kết nối 4G thông thường
+•Order được cập nhật realtime tại quầy trong vòng dưới 1 giây sau khi khách bấm Đặt Món
+•Hỗ trợ tối thiểu 50 bàn đồng thời mà không giảm hiệu năng
+
+4.2 Bảo Mật
+•Mã QR bàn chứa token ngẫu nhiên — không thể đoán được ID bàn khác
+•JWT Authentication cho Admin và Nhân viên
+•HTTPS toàn bộ, dữ liệu thanh toán không lưu tại server phần mềm
+•Phân quyền rõ ràng — nhân viên không thể truy cập dashboard doanh thu
+
+4.3 Khả Năng Sử Dụng
+•Giao diện khách hàng: chạy trên mọi smartphone, không cần cài app, không cần đăng nhập
+•Giao diện Admin/Nhân viên: responsive, dùng được trên máy tính và tablet
+•Hỗ trợ in bill qua máy in nhiệt cổng USB hoặc LAN (Epson TM-T82, Xprinter...)
+
+4.4 Khả Dụng & Độ Tin Cậy
+•Uptime tối thiểu 99.5% — hệ thống cloud, auto-failover
+•Offline mode cơ bản: Admin vẫn xem được dữ liệu đã cache khi mất mạng tạm thời
+•Backup dữ liệu tự động hàng ngày
+
+4.5 Khả Năng Mở Rộng
+•Kiến trúc microservice / modular — dễ thêm tính năng mới (đặt bàn online, loyalty points...)
+•Hỗ trợ nhiều chi nhánh trong tương lai
+
+
+CHƯƠNG 5: LUỒNG XỬ LÝ HỆ THỐNG
+5.1 Luồng Order Từ QR Đến Bếp
+Dưới đây là luồng xử lý chi tiết từ khi khách quét QR đến khi bếp nhận phiếu:
+
+Bước	Mô Tả
+1. Quét QR	Khách quét mã QR trên bàn → trình duyệt mở URL dạng: https://app.quanXYZ.vn/menu?table=abc123token
+2. Load Menu	Server xác thực token → trả về menu của quán (JSON) → render giao diện trên điện thoại khách
+3. Thêm giỏ hàng	Khách chọn món → data lưu tạm ở localStorage của trình duyệt
+4. Đặt món	Khách bấm Đặt → POST /api/orders {tableId, items[]} → server lưu vào DB
+5. Realtime push	Server phát WebSocket event tới tất cả client đang subscribe bàn này (nhân viên, màn hình bếp)
+6. Nhận order	Màn hình nhân viên + màn hình bếp (KDS) hiển thị phiếu order mới, phát âm thanh thông báo
+7. In phiếu bếp	Hệ thống tự in qua máy in nhiệt (nếu cấu hình) hoặc nhân viên bấm in thủ công
+8. Xác nhận	Nhân viên/bếp xác nhận đã nhận → trạng thái order cập nhật: Chờ → Đang làm → Hoàn thành
+
+5.2 Luồng Thanh Toán MoMo / Ngân Hàng
+Đây là phần quan trọng nhất cần làm rõ: QR thanh toán hiển thị đúng số tiền, tự động xác nhận khi khách quét xong.
+
+Bước	Mô Tả
+1. Yêu cầu TT	Khách gọi nhân viên hoặc bấm Yêu Cầu Thanh Toán trên điện thoại
+2. Chọn phương thức	Nhân viên bấm vào bàn → chọn: MoMo hoặc Ngân Hàng (VietQR)
+3. Tạo QR động	Server gọi API MoMo (captureWallet) hoặc tạo VietQR URL với amount = tổng tiền bàn → nhận về qrCodeUrl
+4. Hiển thị QR	Màn hình nhân viên/POS hiển thị mã QR có sẵn số tiền — khách chỉ cần quét và xác nhận
+5. Khách quét & xác nhận	Khách mở app MoMo / app ngân hàng → quét QR → số tiền tự điền → khách xác nhận
+6. Callback IPN	MoMo/ngân hàng gửi IPN (Instant Payment Notification) về server: POST /api/payment/callback
+7. Xác nhận thành công	Server verify chữ ký HMAC → cập nhật trạng thái order → bàn chuyển về Trống → tự động in bill
+8. Hoàn tất	Màn hình nhân viên hiển thị: Thanh toán thành công ✓ — có thể in bill giao khách
+
+⚠️ Quan Trọng: Cần Đăng Ký Tài Khoản Doanh Nghiệp
+Để tích hợp MoMo tự động (tạo QR theo số tiền + nhận callback), bắt buộc phải đăng ký tài khoản MoMo for Business (M4B) tại business.momo.vn. Không cần quan hệ đặc biệt với ngân hàng — chỉ cần đăng ký và lấy partnerCode + accessKey + secretKey. Với VietQR (chuyển khoản ngân hàng), chỉ cần số tài khoản ngân hàng là có thể tạo QR tĩnh kèm số tiền — hoàn toàn miễn phí qua API vietqr.io.
+
+
+CHƯƠNG 6: THIẾT KẾ CƠ SỞ DỮ LIỆU
+6.1 Các Bảng Chính
+Database thiết kế theo mô hình quan hệ (PostgreSQL), tối ưu cho truy vấn realtime và báo cáo thống kê:
+
+Bảng: restaurants (Thông tin quán)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID — mã quán duy nhất
+name	VARCHAR(255) — tên quán
+logo_url	TEXT — đường dẫn logo
+address	TEXT — địa chỉ
+settings	JSONB — cấu hình: thuế, giờ mở cửa, màu theme...
+created_at	TIMESTAMP
+
+Bảng: users (Tài khoản hệ thống)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID
+restaurant_id (FK)	UUID → restaurants.id
+name	VARCHAR(255)
+email	VARCHAR(255) UNIQUE
+password_hash	TEXT
+role	ENUM: admin | staff
+is_active	BOOLEAN
+created_at	TIMESTAMP
+
+Bảng: tables (Bàn trong quán)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID
+restaurant_id (FK)	UUID → restaurants.id
+table_number	VARCHAR(50) — tên/số bàn (VD: Bàn 1, VIP-A)
+qr_token	VARCHAR(64) UNIQUE — token ngẫu nhiên trong URL QR
+zone	VARCHAR(100) — khu vực: tầng 1, ngoài trời...
+status	ENUM: empty | occupied | reserved
+capacity	INT — sức chứa
+
+Bảng: categories (Danh mục menu)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID
+restaurant_id (FK)	UUID
+name	VARCHAR(255) — Đồ uống, Đồ ăn, Tráng miệng...
+sort_order	INT
+is_active	BOOLEAN
+
+Bảng: products (Sản phẩm / Món ăn)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID
+restaurant_id (FK)	UUID
+category_id (FK)	UUID → categories.id
+name	VARCHAR(255)
+description	TEXT
+image_url	TEXT
+base_price	BIGINT — giá cơ bản (VNĐ, không dùng float)
+options	JSONB — [{name: 'Size', values: [{label:'M', price:0},{label:'L',price:5000}]}]
+is_available	BOOLEAN — ẩn/hiện tạm thời
+sort_order	INT
+
+Bảng: sessions (Phiên ngồi của khách)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID
+restaurant_id (FK)	UUID
+table_id (FK)	UUID → tables.id
+status	ENUM: active | payment_requested | paid | cancelled
+opened_at	TIMESTAMP
+closed_at	TIMESTAMP NULL
+total_amount	BIGINT — tổng tiền (tính realtime)
+paid_amount	BIGINT NULL
+payment_method	ENUM: cash | momo | bank_transfer | NULL
+
+Bảng: orders (Lượt đặt món)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID
+session_id (FK)	UUID → sessions.id
+table_id (FK)	UUID — denormalized để query nhanh
+status	ENUM: pending | confirmed | preparing | served | cancelled
+note	TEXT NULL — ghi chú của khách
+created_at	TIMESTAMP
+confirmed_at	TIMESTAMP NULL
+
+Bảng: order_items (Món trong mỗi lượt đặt)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID
+order_id (FK)	UUID → orders.id
+product_id (FK)	UUID → products.id
+product_name	VARCHAR(255) — lưu snapshot tên lúc đặt
+unit_price	BIGINT — snapshot giá lúc đặt
+quantity	INT
+selected_options	JSONB — [{name:'Size', value:'L', price_add:5000}]
+subtotal	BIGINT
+note	TEXT NULL — ghi chú riêng món
+
+Bảng: payments (Giao dịch thanh toán)
+Cột	Kiểu & Mô Tả
+id (PK)	UUID
+session_id (FK)	UUID → sessions.id
+method	ENUM: cash | momo | vietqr
+amount	BIGINT
+status	ENUM: pending | success | failed
+external_tx_id	VARCHAR — mã giao dịch từ MoMo/ngân hàng
+qr_code_url	TEXT NULL — URL QR đã tạo
+ipn_data	JSONB NULL — raw callback từ MoMo
+created_at	TIMESTAMP
+paid_at	TIMESTAMP NULL
+
+Ghi Chú Thiết Kế DB
+1) Dùng BIGINT cho tiền (VNĐ), không dùng DECIMAL/FLOAT — tránh lỗi làm tròn số thập phân. 2) Lưu snapshot tên sản phẩm và giá vào order_items để bill không bị sai khi chủ quán cập nhật giá sau. 3) Dùng JSONB cho options và settings để linh hoạt mở rộng mà không cần migration. 4) Index trên: sessions(table_id, status), orders(session_id), order_items(order_id).
+
+
+CHƯƠNG 7: KIẾN TRÚC HỆ THỐNG & CÔNG NGHỆ
+7.1 Lựa Chọn Nền Tảng: Web hay Desktop?
+Khuyến nghị: Xây dựng Web Application (PWA - Progressive Web App). Đây là lựa chọn tối ưu nhất cho bài toán này.
+
+Tiêu Chí	Web App (Khuyến nghị)	Desktop App
+Khách hàng quét QR	✅ Mở ngay trên trình duyệt, không cài app	❌ Không khả thi
+Admin/Nhân viên	✅ Dùng được trên bất kỳ PC/Tablet/POS nào	⚠️ Chỉ dùng được trên máy đã cài
+Máy POS hiện có	✅ Mở Chrome/Edge là dùng được ngay	⚠️ Cần cài đặt, tương thích phức tạp
+Cập nhật phần mềm	✅ Deploy server là tất cả có bản mới ngay	⚠️ Cần cài lại từng máy
+Hoạt động offline	⚠️ Hạn chế (cần cache)	✅ Tốt hơn
+Chi phí phát triển	✅ Thấp hơn — một codebase cho tất cả	⚠️ Cần build riêng cho Windows/Mac
+
+7.2 Máy POS Hiện Có Dùng Như Thế Nào?
+Đây là câu hỏi thực tế quan trọng. Giải pháp rất đơn giản:
+•Máy POS (chạy Windows hoặc Android) chỉ cần có Chrome/Edge/trình duyệt
+•Nhân viên mở trình duyệt → vào URL: https://pos.quanXYZ.vn → đăng nhập
+•Ghim trang này lên màn hình desktop (shortcut) để mở nhanh như app
+•Đối với máy POS chạy Android: tương tự — mở Chrome, ghim vào màn hình chính
+•Đối với máy in nhiệt kết nối LAN: cài Print Service trên máy POS, nhận lệnh in từ server qua WebSocket
+
+7.3 Realtime: QR Quét Xong Hiển Thị Ngay Tại Quầy
+Đây là tính năng cốt lõi — thực hiện bằng WebSocket (Socket.IO):
+1.Khi khách bấm Đặt Món → REST API lưu order vào DB
+2.Server emit WebSocket event: order:new {tableId, items, total}
+3.Tất cả client đang mở trang nhân viên/bếp nhận event ngay lập tức
+4.Giao diện tự cập nhật không cần F5 — màu bàn đổi, số tiền cập nhật, phiếu bếp xuất hiện
+5.Nếu cấu hình máy in: server gửi lệnh in tới Print Service trên máy POS
+
+7.4 Stack Công Nghệ Khuyến Nghị
+Tầng	Công Nghệ	Lý Do
+Backend	Node.js + Express (hoặc NestJS)	Xử lý WebSocket tốt, ecosystem phong phú, team dễ tìm
+Realtime	Socket.IO	Thư viện WebSocket phổ biến nhất, tự reconnect
+Database	PostgreSQL	Mạnh về transaction, JSONB, phù hợp dữ liệu quan hệ
+Cache/Queue	Redis	Lưu session, pub/sub cho WebSocket scale
+Frontend Khách	React / Next.js (PWA)	Load nhanh, SEO, hoạt động như app trên mobile
+Frontend Admin	React + Tailwind CSS	Dashboard responsive, component reuse
+QR Code Gen	qrcode npm package	Tạo QR URL kèm logo quán, xuất PNG/PDF
+Thanh toán	MoMo API v3 + VietQR API	Xem chi tiết Chương 8
+Hosting	VPS (DigitalOcean/Vultr) hoặc AWS	Full control, giá tốt, đặt ở Việt Nam để latency thấp
+In bill	node-thermal-printer	Hỗ trợ Epson ESC/POS, Xprinter, Star...
+
+
+CHƯƠNG 8: TÍCH HỢP THANH TOÁN
+8.1 VietQR — Chuyển Khoản Ngân Hàng
+VietQR là chuẩn QR quốc gia do NAPAS phát hành. Khi khách quét, app ngân hàng tự điền thông tin người nhận và số tiền.
+
+Cách hoạt động của VietQR
+Không cần đăng ký API hay liên hệ ngân hàng! Chỉ cần tài khoản ngân hàng thông thường. Sử dụng API miễn phí tại img.vietqr.io/image/{bank_id}-{account_number}-{template}.png?amount={so_tien}&addInfo={noi_dung}. Ví dụ: img.vietqr.io/image/VCB-1234567890-compact2.png?amount=150000&addInfo=BAN01-ORDER123. Sau khi khách chuyển khoản thành công, để tự động xác nhận, cần đăng ký webhook từ ngân hàng (Vietcombank, Techcombank, MB Bank... đều hỗ trợ) hoặc dùng dịch vụ trung gian như SePay, PayOS.
+
+Phương Án	Mô Tả
+VietQR + SePay	Đăng ký SePay.vn — nhận webhook real-time khi có tiền vào tài khoản ngân hàng. Chi phí: 0đ giao dịch (chỉ phí dịch vụ nhỏ hàng tháng)
+VietQR + PayOS	API của PayOS.vn — tạo payment link kèm VietQR. Hỗ trợ 30+ ngân hàng. Chi phí: 2.000đ/giao dịch thành công
+MoMo Business API	Tạo QR MoMo theo số tiền. Callback tự động. Xem mục 8.2
+
+8.2 MoMo Business API
+Để tích hợp MoMo tự động (tạo QR theo tổng tiền + tự xác nhận khi khách quét), cần thực hiện:
+
+6.Đăng ký tài khoản MoMo for Business tại business.momo.vn — cung cấp CCCD/Giấy phép KD
+7.Sau xét duyệt (~3-7 ngày làm việc): nhận partnerCode, accessKey, secretKey
+8.Tích hợp API captureWallet: POST https://payment.momo.vn/v2/gateway/api/create
+9.Request body bao gồm: partnerCode, amount (tổng tiền bàn), orderId, returnUrl, notifyUrl (IPN endpoint)
+10.MoMo trả về qrCodeUrl — hiển thị QR này trên màn hình nhân viên/POS
+11.Khi khách quét và xác nhận: MoMo POST về notifyUrl với kết quả giao dịch (verify bằng HMAC-SHA256)
+12.Server nhận IPN → xác thực → đánh dấu session đã thanh toán → bàn về trống
+
+Lưu Ý Quan Trọng Về Thanh Toán
+QR thanh toán có thời hạn (MoMo mặc định 15 phút). Nếu hết hạn cần tạo lại. Mỗi lần tạo QR cần orderID duy nhất. Luôn verify IPN bằng chữ ký HMAC-SHA256 để tránh giả mạo. Tiền về tài khoản MoMo Business của chủ quán ngay lập tức. Phí giao dịch MoMo: khoảng 1.1% - 1.5%/giao dịch (tùy gói đăng ký).
+
+
+CHƯƠNG 9: QUY TRÌNH PHÁT TRIỂN
+9.1 Phương Pháp
+Áp dụng Agile/Scrum với Sprint 2 tuần. Ưu tiên MVP (Minimum Viable Product) trước, bổ sung tính năng nâng cao sau.
+
+9.2 Các Giai Đoạn Phát Triển
+Giai Đoạn	Nội Dung & Thời Gian Ước Tính
+Phase 1: MVP (6-8 tuần)	Backend API cơ bản, DB schema, WebSocket realtime. Giao diện menu khách (quét QR → xem menu → đặt món). Dashboard nhân viên cơ bản (xem bàn, xem order). Admin: CRUD menu, bàn, tạo QR.
+Phase 2: Thanh toán (3-4 tuần)	Tích hợp VietQR (nhanh, miễn phí). Tích hợp MoMo Business API. In bill qua máy in nhiệt. Thanh toán tiền mặt thủ công.
+Phase 3: Dashboard & UX (3-4 tuần)	Dashboard thống kê doanh thu. Biểu đồ top món bán chạy. Xuất báo cáo PDF/CSV. Cải thiện UX/UI toàn bộ.
+Phase 4: Hoàn thiện (2-3 tuần)	Testing đầy đủ, fix bug. Tối ưu hiệu năng. Triển khai production. Hướng dẫn sử dụng.
+
+
+CHƯƠNG 10: KẾ HOẠCH TRIỂN KHAI & RỦI RO
+10.1 Yêu Cầu Hạ Tầng Triển Khai
+•Server VPS tối thiểu: 2 CPU, 4GB RAM, 40GB SSD — đủ cho 1-5 quán
+•Tên miền SSL: https://app.tenquan.vn (hoặc dùng subdomain)
+•Tại quán: WiFi ổn định, máy in nhiệt (tùy chọn), máy tính/POS có trình duyệt
+•Không cần thay thế thiết bị hiện có — cắm thêm máy in hoặc dùng máy in cũ
+
+10.2 Phân Tích Rủi Ro
+Rủi Ro	Mức Độ	Giải Pháp
+Khách không biết dùng smartphone	Thấp	Nhân viên hỗ trợ gọi thay + giữ menu giấy dự phòng
+Mất mạng Internet tại quán	Trung bình	Cache menu offline (PWA), nhân viên nhập thủ công, có hotspot 4G dự phòng
+MoMo chưa duyệt tài khoản	Thấp	Dùng VietQR (không cần duyệt) cho đến khi MoMo xong
+Máy in nhiệt không tương thích	Thấp	Hỗ trợ chuẩn ESC/POS — 90% máy in nhiệt phổ biến tương thích
+Bảo mật: giả mạo callback TT	Cao	Bắt buộc verify HMAC-SHA256 mọi IPN, không tin payload thuần túy
+Hiệu năng khi đông khách	Trung bình	Redis pub/sub, WebSocket pooling, horizontal scaling khi cần
+
+10.3 Tổng Kết Khuyến Nghị
+Tóm tắt các quyết định kiến trúc quan trọng:
+
+Quyết Định	Khuyến Nghị
+Nền tảng	Web App (PWA) — chạy trên mọi thiết bị, không cài app
+Backend	Node.js + PostgreSQL + Socket.IO + Redis
+Frontend	React/Next.js — một codebase cho cả khách và admin
+Máy POS hiện có	Mở Chrome là dùng được — không cần thay thế
+Thanh toán nhanh	VietQR qua SePay hoặc PayOS — không cần đăng ký phức tạp
+Thanh toán MoMo	Đăng ký MoMo Business → API captureWallet + IPN callback
+Realtime order	Socket.IO — order xuất hiện <1 giây tại màn hình quầy/bếp
+In hóa đơn	node-thermal-printer + máy in nhiệt ESC/POS
+
+Với kiến trúc này, phần mềm có thể xây dựng MVP hoàn chỉnh trong khoảng 3-4 tháng, sẵn sàng thương mại hóa và mở rộng ra nhiều quán.
