@@ -79,7 +79,7 @@ export default function HomePage() {
           <div className="bg-white/10 backdrop-blur p-6 rounded-lg text-white">
             <h3 className="font-bold text-lg mb-2">For Customers</h3>
             <p className="text-sm text-white/90">
-              Scan QR code and order food from your table
+              Scan QR code and order food without logging in
             </p>
           </div>
           <div className="bg-white/10 backdrop-blur p-6 rounded-lg text-white">

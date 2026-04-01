@@ -4,17 +4,20 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Trash2 } from 'lucide-react'
+import { formatCurrency } from '@/lib/api'
 
 interface CartItem {
   id: string
   name: string
   price: number
   quantity: number
+  note?: string
 }
 
 interface CartProps {
   items: CartItem[]
   onUpdateQuantity: (itemId: string, quantity: number) => void
+  onUpdateNote?: (itemId: string, note: string) => void
   onRemoveItem: (itemId: string) => void
   onCheckout: () => void
   loading?: boolean
@@ -25,6 +28,7 @@ interface CartProps {
 export function Cart({
   items,
   onUpdateQuantity,
+  onUpdateNote,
   onRemoveItem,
   onCheckout,
   loading,
@@ -32,8 +36,7 @@ export function Cart({
   onNotesChange,
 }: CartProps) {
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const tax = subtotal * 0.1 // 10% tax
-  const total = subtotal + tax
+  const total = subtotal
 
   return (
     <Card className="sticky top-4">
@@ -53,8 +56,16 @@ export function Cart({
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{item.name}</p>
                   <p className="text-xs text-gray-600">
-                    ${item.price.toFixed(2)} each
+                    {formatCurrency(item.price)} each
                   </p>
+                  <textarea
+                    value={item.note || ''}
+                    onChange={(e) => onUpdateNote?.(item.id, e.target.value)}
+                    placeholder="Note for this item"
+                    className="mt-2 w-full rounded border px-2 py-1 text-xs resize-none"
+                    rows={2}
+                    disabled={loading}
+                  />
                 </div>
 
                 <Input
@@ -69,7 +80,7 @@ export function Cart({
                 />
 
                 <span className="text-sm font-medium w-16 text-right">
-                  ${(item.price * item.quantity).toFixed(2)}
+                  {formatCurrency(item.price * item.quantity)}
                 </span>
 
                 <button
@@ -101,15 +112,11 @@ export function Cart({
             <div className="pt-4 space-y-2 border-t">
               <div className="flex justify-between text-sm">
                 <span>Subtotal:</span>
-                <span>${subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span>Tax (10%):</span>
-                <span>${tax.toFixed(2)}</span>
+                <span>{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between font-bold text-lg pt-2 border-t">
                 <span>Total:</span>
-                <span>${total.toFixed(2)}</span>
+                <span>{formatCurrency(total)}</span>
               </div>
             </div>
 

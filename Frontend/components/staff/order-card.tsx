@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { formatCurrency } from '@/lib/api'
 
 interface OrderItem {
   id: string
@@ -22,6 +23,8 @@ interface OrderCardProps {
   totalAmount: number
   createdAt: string
   onStatusChange: (orderId: string, status: string) => void
+  onPrintBill?: () => void
+  onPrintKitchenSlip?: () => void
   loading?: boolean
 }
 
@@ -40,6 +43,8 @@ export function OrderCard({
   totalAmount,
   createdAt,
   onStatusChange,
+  onPrintBill,
+  onPrintKitchenSlip,
   loading,
 }: OrderCardProps) {
   const getNextStatus = (currentStatus: string) => {
@@ -79,7 +84,7 @@ export function OrderCard({
                   {item.quantity}x {item.menu_items.name}
                 </span>
                 <span className="text-gray-600">
-                  ${(item.unit_price * item.quantity).toFixed(2)}
+                  {formatCurrency(item.unit_price * item.quantity)}
                 </span>
               </div>
               {item.special_instructions && (
@@ -94,7 +99,7 @@ export function OrderCard({
         {/* Total */}
         <div className="flex justify-between font-bold mb-4 pb-4 border-b">
           <span>Total:</span>
-          <span className="text-[#2ad38b]">${totalAmount.toFixed(2)}</span>
+          <span className="text-[#2ad38b]">{formatCurrency(totalAmount)}</span>
         </div>
 
         {/* Actions */}
@@ -118,6 +123,28 @@ export function OrderCard({
             disabled={loading}
           >
             Cancel Order
+          </Button>
+        )}
+
+        {onPrintKitchenSlip && (
+          <Button
+            onClick={onPrintKitchenSlip}
+            variant="outline"
+            className="w-full mt-2"
+            disabled={loading}
+          >
+            Print Kitchen Slip
+          </Button>
+        )}
+
+        {onPrintBill && (
+          <Button
+            onClick={onPrintBill}
+            variant="outline"
+            className="w-full mt-2"
+            disabled={loading}
+          >
+            Print Bill
           </Button>
         )}
       </CardContent>

@@ -1,0 +1,215 @@
+{
+  "users": [
+    {
+      "is_active": true,
+      "id": "user_35374045bfc98023",
+      "email": "owner@example.com",
+      "password_hash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "name": "Demo Owner",
+      "role": "owner",
+      "restaurant_id": "rest_demo_001",
+      "created_at": "2026-04-01T08:02:45.672Z"
+    },
+    {
+      "is_active": true,
+      "id": "user_c12659af63bb8883",
+      "email": "staff@example.com",
+      "password_hash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "name": "Demo Staff",
+      "role": "staff",
+      "restaurant_id": "rest_demo_001",
+      "created_at": "2026-04-01T08:02:45.672Z"
+    },
+    {
+      "is_active": true,
+      "id": "user_b555c88532373243",
+      "email": "staff4@example.com",
+      "password_hash": "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92",
+      "name": "New Staff",
+      "role": "staff",
+      "restaurant_id": "rest_demo_001",
+      "created_at": "2026-04-01T08:20:13.423Z"
+    },
+    {
+      "id": "user_c166f78161ac6e48",
+      "email": "kieukienquocvn@gmail.com",
+      "password_hash": "ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f",
+      "name": "Kiều Kiến Quốc",
+      "role": "owner",
+      "restaurant_id": "rest_1cb89f7bac90713e",
+      "is_active": true,
+      "created_at": "2026-04-01T08:32:27.708Z"
+    }
+  ],
+  "restaurants": [
+    {
+      "id": "rest_demo_001",
+      "name": "Demo QR Restaurant",
+      "address": "123 Demo Street",
+      "owner_id": "user_35374045bfc98023",
+      "created_at": "2026-04-01T08:02:45.672Z"
+    },
+    {
+      "id": "rest_1cb89f7bac90713e",
+      "name": "quoc",
+      "address": "",
+      "owner_id": "user_c166f78161ac6e48",
+      "created_at": "2026-04-01T08:32:27.707Z"
+    }
+  ],
+  "tables": [
+    {
+      "guest_count": 3,
+      "zone": "Tang 2",
+      "capacity": 8,
+      "id": "table_86391ca0ce26b5cc",
+      "restaurant_id": "rest_demo_001",
+      "table_number": 1,
+      "status": "occupied",
+      "qr_token": "qrtoken_0ffb8c9f7456df8c",
+      "created_at": "2026-04-01T08:02:45.672Z"
+    },
+    {
+      "guest_count": 0,
+      "zone": "Tang 1",
+      "capacity": 4,
+      "id": "table_a5b986e1581fc56b",
+      "restaurant_id": "rest_demo_001",
+      "table_number": 2,
+      "status": "empty",
+      "qr_token": "qrtoken_d730cb9d0de883f5",
+      "created_at": "2026-04-01T08:02:45.672Z"
+    },
+    {
+      "guest_count": 0,
+      "zone": "VIP",
+      "capacity": 6,
+      "id": "table_2968a1ab63658c22",
+      "restaurant_id": "rest_demo_001",
+      "table_number": 3,
+      "status": "empty",
+      "qr_token": "qrtoken_041266a41e2dbc82",
+      "created_at": "2026-04-01T08:02:45.672Z"
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat_57a5e5d6643dd313",
+      "restaurant_id": "rest_demo_001",
+      "name": "Pizza",
+      "sort_order": 1,
+      "is_active": true
+    },
+    {
+      "id": "cat_70fa2c82798ca0a7",
+      "restaurant_id": "rest_demo_001",
+      "name": "Drinks",
+      "sort_order": 2,
+      "is_active": true
+    },
+    {
+      "id": "cat_f64b245249446981",
+      "restaurant_id": "rest_demo_001",
+      "name": "Dessert",
+      "sort_order": 3,
+      "is_active": true
+    }
+  ],
+  "menu_items": [
+    {
+      "id": "item_d3c4225b4f8974ec",
+      "restaurant_id": "rest_demo_001",
+      "category_id": "cat_57a5e5d6643dd313",
+      "name": "Margherita Pizza",
+      "description": "Classic pizza with tomato and mozzarella",
+      "price": 129000,
+      "image_url": "",
+      "is_available": true,
+      "display_order": 1,
+      "options": []
+    },
+    {
+      "id": "item_eebf67be03be9fd5",
+      "restaurant_id": "rest_demo_001",
+      "category_id": "cat_57a5e5d6643dd313",
+      "name": "Pepperoni Pizza",
+      "description": "Pepperoni and cheese",
+      "price": 149000,
+      "image_url": "",
+      "is_available": true,
+      "display_order": 2,
+      "options": []
+    },
+    {
+      "id": "item_5a3cb25b3622cdee",
+      "restaurant_id": "rest_demo_001",
+      "category_id": "cat_70fa2c82798ca0a7",
+      "name": "Iced Tea",
+      "description": "Refreshing iced tea",
+      "price": 29000,
+      "image_url": "",
+      "is_available": true,
+      "display_order": 1,
+      "options": []
+    }
+  ],
+  "sessions": [
+    {
+      "id": "session_d684554ef16648c3",
+      "restaurant_id": "rest_demo_001",
+      "table_id": "table_86391ca0ce26b5cc",
+      "status": "payment_requested",
+      "opened_at": "2026-04-01T08:04:42.653Z",
+      "closed_at": null,
+      "total_amount": 10000,
+      "paid_amount": 0,
+      "payment_method": null
+    }
+  ],
+  "orders": [
+    {
+      "id": "order_d7d11a0107759b54",
+      "session_id": "session_d684554ef16648c3",
+      "restaurant_id": "rest_demo_001",
+      "table_id": "table_86391ca0ce26b5cc",
+      "customer_id": null,
+      "status": "pending",
+      "total_amount": 10000,
+      "notes": "test order",
+      "created_at": "2026-04-01T08:04:42.653Z",
+      "confirmed_at": null
+    }
+  ],
+  "order_items": [
+    {
+      "id": "order_item_ff414623c4ccec68",
+      "order_id": "order_d7d11a0107759b54",
+      "menu_item_id": "item_missing",
+      "product_name": "Unknown Item",
+      "unit_price": 10000,
+      "quantity": 1,
+      "selected_options": [],
+      "note": "",
+      "created_at": "2026-04-01T08:04:42.653Z"
+    }
+  ],
+  "payments": [],
+  "activity_logs": [
+    {
+      "id": "log_e2ff3c53de18f1d4",
+      "created_at": "2026-04-01T08:20:13.424Z",
+      "actor_id": "user_b555c88532373243",
+      "restaurant_id": "rest_demo_001",
+      "action": "create_staff",
+      "detail": "Staff staff4@example.com created"
+    },
+    {
+      "id": "log_924247d4c4361d2c",
+      "created_at": "2026-04-01T08:32:27.708Z",
+      "actor_id": "user_c166f78161ac6e48",
+      "restaurant_id": "rest_1cb89f7bac90713e",
+      "action": "signup",
+      "detail": "owner account created"
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { apiUrl } from '@/lib/api'
 
 type UserRole = 'staff' | 'owner'
 
@@ -40,7 +41,7 @@ export default function SignupPage() {
         return
       }
 
-      const response = await fetch('/api/auth/signup', {
+      const response = await fetch(apiUrl('/api/auth/signup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -49,6 +50,7 @@ export default function SignupPage() {
           name: formData.name,
           role: selectedRole,
           restaurantId: formData.restaurantId || null,
+          restaurantName: formData.restaurantName || '',
         }),
       })
 
@@ -59,7 +61,6 @@ export default function SignupPage() {
         return
       }
 
-      // Redirect to login
       router.push('/login')
     } catch (err) {
       setError('An error occurred. Please try again.')
@@ -175,6 +176,22 @@ export default function SignupPage() {
                   name="restaurantId"
                   placeholder="Your restaurant ID"
                   value={formData.restaurantId}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                />
+              </div>
+            )}
+
+            {selectedRole === 'owner' && (
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Restaurant Name
+                </label>
+                <Input
+                  type="text"
+                  name="restaurantName"
+                  placeholder="My Restaurant"
+                  value={formData.restaurantName}
                   onChange={handleInputChange}
                   disabled={loading}
                 />

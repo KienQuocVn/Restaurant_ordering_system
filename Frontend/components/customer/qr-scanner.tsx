@@ -6,7 +6,11 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface QRScannerProps {
-  onScan: (restaurantId: string, tableId: string) => void
+  onScan: (payload: {
+    token?: string
+    restaurantId?: string
+    tableId?: string
+  }) => void
   loading?: boolean
 }
 
@@ -17,7 +21,30 @@ export function QRScanner({ onScan, loading }: QRScannerProps) {
   const handleManualScan = () => {
     setError('')
     
-    // Expected format: restaurant_id|table_id
+    if (manualInput.includes('/customer?token=')) {
+      try {
+        const parsed = new URL(manualInput)
+        const token = parsed.searchParams.get('token')
+        if (!token) {
+          setError('QR URL does not contain a token')
+          return
+        }
+
+        onScan({ token })
+        setManualInput('')
+        return
+      } catch (error) {
+        setError('Invalid QR URL')
+        return
+      }
+    }
+
+    if (!manualInput.includes('|') && manualInput.trim()) {
+      onScan({ token: manualInput.trim() })
+      setManualInput('')
+      return
+    }
+
     const parts = manualInput.split('|')
     if (parts.length !== 2) {
       setError('Invalid QR code format. Expected: restaurant_id|table_id')
@@ -30,7 +57,7 @@ export function QRScanner({ onScan, loading }: QRScannerProps) {
       return
     }
 
-    onScan(restaurantId, tableId)
+    onScan({ restaurantId, tableId })
     setManualInput('')
   }
 

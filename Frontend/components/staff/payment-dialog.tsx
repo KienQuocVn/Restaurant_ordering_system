@@ -10,12 +10,14 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { formatCurrency } from '@/lib/api'
 
 interface PaymentDialogProps {
   open: boolean
   orderId: string
   tableNumber: number
   totalAmount: number
+  qrCodeUrl?: string
   onClose: () => void
   onPaymentSubmit: (paymentMethod: string) => void
   loading?: boolean
@@ -26,6 +28,7 @@ export function PaymentDialog({
   orderId,
   tableNumber,
   totalAmount,
+  qrCodeUrl,
   onClose,
   onPaymentSubmit,
   loading,
@@ -73,7 +76,7 @@ export function PaymentDialog({
           <div className="bg-gray-50 p-4 rounded-lg">
             <p className="text-sm text-gray-600 mb-1">Total Amount</p>
             <p className="text-2xl font-bold text-[#2ad38b]">
-              ${totalAmount.toFixed(2)}
+              {formatCurrency(totalAmount)}
             </p>
           </div>
 
@@ -115,6 +118,20 @@ export function PaymentDialog({
               <p className="text-blue-800">
                 Customer should transfer to the restaurant&apos;s bank account using the provided details.
               </p>
+            </div>
+          )}
+
+          {qrCodeUrl && (
+            <div className="bg-gray-50 border rounded p-3 text-sm">
+              <p className="font-medium mb-2">Generated payment QR / link</p>
+              <a
+                href={qrCodeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 break-all"
+              >
+                {qrCodeUrl}
+              </a>
             </div>
           )}
         </div>

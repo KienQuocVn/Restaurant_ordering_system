@@ -6,19 +6,17 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 interface QRCodeGeneratorProps {
-  restaurantId: string
+  value: string
   tableNumber: number
   size?: number
 }
 
 export function QRCodeGenerator({
-  restaurantId,
+  value,
   tableNumber,
   size = 256,
 }: QRCodeGeneratorProps) {
   const qrRef = useRef<HTMLDivElement>(null)
-
-  const qrValue = `${restaurantId}|table_${tableNumber}`
 
   const handleDownload = () => {
     const canvas = qrRef.current?.querySelector('canvas') as HTMLCanvasElement
@@ -53,7 +51,7 @@ export function QRCodeGenerator({
         <div className="flex justify-center p-6 bg-gray-50 rounded-lg border-2 border-dashed">
           <div ref={qrRef}>
             <QRCodeCanvas
-              value={qrValue}
+              value={value}
               size={size}
               level="H"
               includeMargin={true}
@@ -64,7 +62,7 @@ export function QRCodeGenerator({
         </div>
 
         <p className="text-xs text-gray-600 text-center break-all">
-          Data: {qrValue}
+          Data: {value}
         </p>
 
         <div className="flex gap-2">

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Trash2, Edit2 } from 'lucide-react'
+import { formatCurrency } from '@/lib/api'
 
 interface MenuItem {
   id: string
@@ -130,7 +131,7 @@ export function MenuEditor({
                 <div className="flex items-center gap-3 ml-4">
                   <div className="text-right">
                     <p className="font-bold text-[#2ad38b]">
-                      ${item.price.toFixed(2)}
+                      {formatCurrency(item.price)}
                     </p>
                     <p className="text-xs text-gray-600">
                       {item.is_available ? 'Available' : 'Unavailable'}

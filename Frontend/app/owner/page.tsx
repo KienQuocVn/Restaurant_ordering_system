@@ -6,6 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AnalyticsCharts } from '@/components/owner/analytics-charts'
 import { MenuEditor } from '@/components/owner/menu-editor'
+import { CategoryManager } from '@/components/owner/category-manager'
+import { StaffManager } from '@/components/owner/staff-manager'
+import { OrderManager } from '@/components/owner/order-manager'
+import { apiUrl, formatCurrency } from '@/lib/api'
 
 interface MenuItem {
   id: string
@@ -38,6 +42,9 @@ export default function OwnerPage() {
   })
   const [categories, setCategories] = useState<MenuCategory[]>([])
   const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+  const [orders, setOrders] = useState<any[]>([])
+  const [staff, setStaff] = useState<any[]>([])
+  const [activityLogs, setActivityLogs] = useState<any[]>([])
 
   // Check if user is logged in and is owner
   useEffect(() => {
@@ -54,14 +61,16 @@ export default function OwnerPage() {
     }
 
     setUser(parsedUser)
-    loadAnalytics(parsedUser.id)
-    loadMenu(parsedUser.id)
+    loadAnalytics(parsedUser.restaurant_id)
+    loadMenu(parsedUser.restaurant_id)
+    loadOrders(parsedUser.restaurant_id)
+    loadStaff(parsedUser.restaurant_id)
   }, [])
 
   const loadAnalytics = async (restaurantId: string) => {
     try {
       const response = await fetch(
-        `/api/owner/analytics?restaurant_id=${restaurantId}`
+        apiUrl(`/api/owner/analytics?restaurant_id=${restaurantId}`)
       )
       if (!response.ok) throw new Error('Failed to load analytics')
 
@@ -77,7 +86,7 @@ export default function OwnerPage() {
   const loadMenu = async (restaurantId: string) => {
     try {
       const response = await fetch(
-        `/api/owner/menu?restaurant_id=${restaurantId}`
+        apiUrl(`/api/owner/menu?restaurant_id=${restaurantId}`)
       )
       if (!response.ok) throw new Error('Failed to load menu')
 
@@ -89,16 +98,43 @@ export default function OwnerPage() {
     }
   }
 
+  const loadOrders = async (restaurantId: string) => {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/owner/orders?restaurant_id=${restaurantId}`)
+      )
+      if (!response.ok) throw new Error('Failed to load orders')
+      const data = await response.json()
+      setOrders(data || [])
+    } catch (err) {
+      console.error('Error loading orders:', err)
+    }
+  }
+
+  const loadStaff = async (restaurantId: string) => {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/owner/staff?restaurant_id=${restaurantId}`)
+      )
+      if (!response.ok) throw new Error('Failed to load staff')
+      const data = await response.json()
+      setStaff(data.staff || [])
+      setActivityLogs(data.logs || [])
+    } catch (err) {
+      console.error('Error loading staff:', err)
+    }
+  }
+
   const handleAddMenuItem = async (item: any) => {
     setLoading(true)
     setError('')
 
     try {
-      const response = await fetch('/api/owner/menu', {
+      const response = await fetch(apiUrl('/api/owner/menu'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          restaurantId: user.id,
+          restaurantId: user.restaurant_id,
           type: 'item',
           data: {
             categoryId: categories[0]?.id || 'uncategorized',
@@ -110,7 +146,7 @@ export default function OwnerPage() {
       if (!response.ok) throw new Error('Failed to add item')
 
       if (user) {
-        loadMenu(user.id)
+        loadMenu(user.restaurant_id)
       }
     } catch (err) {
       console.error('Error adding item:', err)
@@ -125,7 +161,7 @@ export default function OwnerPage() {
     setError('')
 
     try {
-      const response = await fetch('/api/owner/menu', {
+      const response = await fetch(apiUrl('/api/owner/menu'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,7 +174,7 @@ export default function OwnerPage() {
       if (!response.ok) throw new Error('Failed to update item')
 
       if (user) {
-        loadMenu(user.id)
+        loadMenu(user.restaurant_id)
       }
     } catch (err) {
       console.error('Error updating item:', err)
@@ -155,18 +191,157 @@ export default function OwnerPage() {
     setError('')
 
     try {
-      const response = await fetch(`/api/owner/menu?item_id=${itemId}`, {
+      const response = await fetch(apiUrl(`/api/owner/menu?item_id=${itemId}`), {
         method: 'DELETE',
       })
 
       if (!response.ok) throw new Error('Failed to delete item')
 
       if (user) {
-        loadMenu(user.id)
+        loadMenu(user.restaurant_id)
       }
     } catch (err) {
       console.error('Error deleting item:', err)
       setError('Failed to delete item')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAddCategory = async (name: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(apiUrl('/api/owner/categories'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId: user.restaurant_id,
+          name,
+        }),
+      })
+      if (!response.ok) throw new Error('Failed to add category')
+      loadMenu(user.restaurant_id)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to add category')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateCategory = async (categoryId: string, name: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(apiUrl('/api/owner/categories'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ categoryId, name }),
+      })
+      if (!response.ok) throw new Error('Failed to update category')
+      loadMenu(user.restaurant_id)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to update category')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(
+        apiUrl(`/api/owner/categories?category_id=${categoryId}`),
+        { method: 'DELETE' }
+      )
+      if (!response.ok) throw new Error('Failed to delete category')
+      loadMenu(user.restaurant_id)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to delete category')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateStaff = async (payload: {
+    name: string
+    email: string
+    password: string
+  }) => {
+    setLoading(true)
+    try {
+      const response = await fetch(apiUrl('/api/owner/staff'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId: user.restaurant_id,
+          ...payload,
+        }),
+      })
+      if (!response.ok) throw new Error('Failed to create staff')
+      loadStaff(user.restaurant_id)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to create staff')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleToggleStaff = async (staffId: string, isActive: boolean) => {
+    setLoading(true)
+    try {
+      const response = await fetch(apiUrl('/api/owner/staff'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, isActive }),
+      })
+      if (!response.ok) throw new Error('Failed to update staff')
+      loadStaff(user.restaurant_id)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to update staff')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteStaff = async (staffId: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(
+        apiUrl(`/api/owner/staff?staff_id=${staffId}`),
+        { method: 'DELETE' }
+      )
+      if (!response.ok) throw new Error('Failed to disable staff')
+      loadStaff(user.restaurant_id)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to disable staff')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCancelOrder = async (orderId: string, reason: string) => {
+    setLoading(true)
+    try {
+      const response = await fetch(apiUrl('/api/owner/orders'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          status: 'cancelled',
+          cancelReason: reason,
+        }),
+      })
+      if (!response.ok) throw new Error('Failed to cancel order')
+      loadOrders(user.restaurant_id)
+      loadAnalytics(user.restaurant_id)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to cancel order')
     } finally {
       setLoading(false)
     }
@@ -210,9 +385,11 @@ export default function OwnerPage() {
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="menu">Menu Management</TabsTrigger>
+            <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="staff">Staff</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -231,7 +408,7 @@ export default function OwnerPage() {
               <div className="bg-white rounded-lg p-6 border">
                 <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
                 <p className="text-3xl font-bold text-green-600">
-                  ${analytics.stats.totalRevenue.toFixed(2)}
+                  {formatCurrency(analytics.stats.totalRevenue)}
                 </p>
                 <p className="text-xs text-gray-500 mt-2">Today</p>
               </div>
@@ -249,7 +426,7 @@ export default function OwnerPage() {
                   Average Order Value
                 </p>
                 <p className="text-3xl font-bold text-orange-600">
-                  ${analytics.stats.averageOrderValue.toFixed(2)}
+                  {formatCurrency(analytics.stats.averageOrderValue)}
                 </p>
                 <p className="text-xs text-gray-500 mt-2">Today</p>
               </div>
@@ -264,11 +441,39 @@ export default function OwnerPage() {
 
           {/* Menu Management Tab */}
           <TabsContent value="menu">
-            <MenuEditor
-              items={menuItems}
-              onAddItem={handleAddMenuItem}
-              onUpdateItem={handleUpdateMenuItem}
-              onDeleteItem={handleDeleteMenuItem}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <MenuEditor
+                items={menuItems}
+                onAddItem={handleAddMenuItem}
+                onUpdateItem={handleUpdateMenuItem}
+                onDeleteItem={handleDeleteMenuItem}
+                loading={loading}
+              />
+              <CategoryManager
+                categories={categories}
+                onAddCategory={handleAddCategory}
+                onUpdateCategory={handleUpdateCategory}
+                onDeleteCategory={handleDeleteCategory}
+                loading={loading}
+              />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="orders">
+            <OrderManager
+              orders={orders}
+              onCancelOrder={handleCancelOrder}
+              loading={loading}
+            />
+          </TabsContent>
+
+          <TabsContent value="staff">
+            <StaffManager
+              staff={staff}
+              logs={activityLogs}
+              onCreateStaff={handleCreateStaff}
+              onToggleStaff={handleToggleStaff}
+              onDeleteStaff={handleDeleteStaff}
               loading={loading}
             />
           </TabsContent>
@@ -281,10 +486,19 @@ export default function OwnerPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Restaurant ID
+                    Account ID
                   </label>
                   <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
                     {user.id}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Restaurant ID
+                  </label>
+                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                    {user.restaurant_id}
                   </p>
                 </div>
 

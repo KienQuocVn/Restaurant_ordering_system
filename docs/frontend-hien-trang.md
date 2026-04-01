@@ -1,187 +1,340 @@
-# Hien trang frontend QR ordering
+# Hien trang du an QR ordering
 
-## 1. Tong quan
+## Cach doc tai lieu
 
-Frontend hien tai la mot ung dung Next.js gom 3 khu vuc giao dien chinh:
+- `[x]`: Da lam xong o muc hien tai
+- `[~]`: Da lam mot phan / moi o muc demo / chua dung hoan toan theo bao cao
+- `[ ]`: Chua lam
 
-- Khach hang: `/customer`
-- Nhan vien: `/staff`
-- Chu quan/Admin: `/owner`, `/owner/qr-codes`
+Tai lieu nay tach rieng:
 
-Du an da co kha nhieu man hinh demo va API route trong `Frontend/app/api/*`, nhung chua co backend doc lap trong thu muc `Backend`. Phan lon logic hien tai dang chay theo kieu frontend + API route demo + Supabase.
+- Phan `Frontend`: nhung gi da co tren giao dien va frontend flow
+- Phan `Backend`: nhung gi da co o API, auth, database, realtime, payment
 
-## 2. Doi chieu voi `docs/bao-cao.txt`
+## 1. Tong quan hien tai
+
+### Frontend
+
+- [x] Co ung dung Next.js trong thu muc `Frontend`
+- [x] Da tach giao dien theo 3 vai tro:
+  - Khach hang: `/customer`
+  - Nhan vien: `/staff`
+  - Chu quan/Admin: `/owner`, `/owner/qr-codes`
+- [x] Khach hang hien tai da co the vao trang order ma khong can login
+- [ ] Frontend hien tai van dang goi API route nam trong `Frontend/app/api/*`
+- [x] Da tach frontend thanh mot client goi backend doc lap qua `NEXT_PUBLIC_API_BASE_URL`
+
+### Backend
+
+- [~] Van con mot so API route demo cu trong `Frontend/app/api/*`, nhung flow chinh da chuyen sang backend rieng
+- [x] Co file schema SQL va sample data trong `Frontend/scripts/*`
+- [x] Da co implementation backend doc lap trong thu muc `Backend`
+- [~] Da co kien truc backend rieng cho auth, menu, tables, sessions, orders, payments, categories, staff, owner orders; chua co realtime
+
+## 2. Hien trang Frontend
 
 ### 2.1 Vai tro khach hang
 
-- `KH-01`: Dat mot phan
-  - Da co man hinh scan/nhap QR va co the vao `/customer` khong can login.
-  - Chua co QR token an toan theo kieu `?table=abc123token` nhu bao cao, hien tai QR dang la chuoi thuan `restaurantId|table_x`.
-- `KH-02`: Da co
-  - Da xem menu theo danh muc.
-- `KH-03`: Dat mot phan
-  - Da hien ten, mo ta, gia, hinh anh.
-  - Chua co size, topping, option.
-- `KH-04`: Dat mot phan
-  - Da them vao gio, sua so luong.
-  - Ghi chu hien tai la ghi chu chung cho don, chua la ghi chu rieng tung mon.
-- `KH-05`: Da co
-  - Da xem lai gio hang va chinh sua truoc khi dat.
-- `KH-06`: Dat mot phan
-  - Da co API tao order.
-  - Chua co realtime day ngay sang man hinh nhan vien/bep dung nghia.
-- `KH-07`: Chua co
-  - Chua co man hinh xem cac mon da order trong phien ban.
-- `KH-08`: Dat mot phan
-  - Co the dat tiep tu menu, nhung chua co session ban dung nghia de gom nhieu lan goi mon.
-- `KH-09`: Chua co
-  - Chua co nut/gui yeu cau thanh toan tren giao dien khach.
+- [x] `KH-01` Co man hinh scan/nhap QR va vao `/customer` khong can login
+- [x] `KH-01` QR token an toan dang `?token=<random>`
+- [x] `KH-02` Xem danh sach menu theo danh muc
+- [~] `KH-03` Xem chi tiet mon: ten, mo ta, gia, hinh anh
+- [ ] `KH-03` Tuy chon size, topping, option
+- [x] `KH-04` Them mon vao gio hang
+- [x] `KH-04` Chinh sua so luong trong gio
+- [x] `KH-04` Ghi chu rieng cho tung mon
+- [x] `KH-05` Xem lai gio hang truoc khi dat
+- [x] `KH-06` Co luong gui order len he thong qua API
+- [ ] `KH-06` Order day ngay sang nhan vien va bep theo realtime dung nghia
+- [x] `KH-07` Xem cac mon da order trong phien ban
+- [~] `KH-08` Co the dat tiep tu menu
+- [x] `KH-08` Gom nhieu lan goi mon trong mot session ban dung nghia
+- [x] `KH-09` Gui yeu cau thanh toan tren giao dien khach
 
-### 2.2 Vai tro chu quan/Admin
+### 2.2 Vai tro chu quan / Admin
 
-- Quan ly ban: Dat mot phan
-  - Da co trang QR code, xem danh sach ban, tao QR, tai/in QR.
-  - Them ban hien tai la mock tren client, chua luu DB.
-  - Chua co CRUD day du, zone, reset ban, so do ban theo mau trang thai.
-- Quan ly menu: Dat mot phan
-  - Da co CRUD mon.
-  - Chua co CRUD category tren UI.
-  - Chua co option/topping, an/hien tam thoi dung nghia, sort menu, upload anh.
-- Quan ly order: Chua dat
-  - Chua co man hinh owner xem tat ca order theo bo loc, huy mon, in bill, in phieu bep.
-- Thanh toan & tai chinh: Dat rat it
-  - Co mot phan thong ke doanh thu va payment method.
-  - Chua co tong tien theo ban real-time, voucher, doi soat giao dich.
-- Dashboard & thong ke: Dat mot phan
-  - Da co KPI va chart top selling/payment methods.
-  - Chua co loc ngay/tuan/thang, CSV/PDF, so luot khach, thoi gian phuc vu.
-- Quan ly nhan vien: Chua co
-  - Chua co CRUD staff, phan quyen chi tiet, activity log.
+#### Quan ly ban
+
+- [x] Co trang QR code cho ban
+- [x] Xem danh sach ban
+- [x] Tao QR cho ban
+- [x] Tai / in QR
+- [x] Them ban vao backend data store that su
+- [x] Sua ban
+- [x] Xoa ban
+- [x] Quan ly zone / khu vuc
+- [x] Reset ban sau thanh toan o muc co ban
+- [ ] So do ban theo mau trang thai
+
+#### Quan ly menu
+
+- [x] CRUD mon tren giao dien owner
+- [x] CRUD category tren UI
+- [ ] Quan ly option / topping
+- [ ] An / hien tam thoi theo nghia nghiep vu day du
+- [ ] Sap xep thu tu menu
+- [ ] Upload / quan ly hinh anh mon
+
+#### Quan ly order
+
+- [x] Xem tat ca order theo bo loc co ban
+- [x] Xem chi tiet tung order theo nghia quan tri co ban
+- [x] Huy mon / huy order kem ly do o muc order
+- [ ] In bill
+- [ ] In phieu bep
+
+#### Thanh toan va tai chinh
+
+- [~] Co mot phan thong ke doanh thu va payment methods tren dashboard
+- [~] Xem tong tien theo ban theo session hien tai
+- [ ] Voucher / giam gia
+- [ ] Doi soat giao dich
+
+#### Dashboard va thong ke
+
+- [x] Co KPI cards
+- [x] Co chart top selling items
+- [x] Co chart payment methods
+- [ ] Loc ngay / tuan / thang
+- [ ] CSV / PDF export
+- [ ] So luot khach
+- [ ] So ban phuc vu
+- [ ] Thoi gian phuc vu trung binh
+
+#### Quan ly nhan vien
+
+- [x] Tao nhan vien
+- [x] Sua / kich hoat / vo hieu hoa nhan vien co ban
+- [x] Xoa / disable nhan vien o muc nghiep vu co ban
+- [~] Phan quyen chi tiet o muc role owner/staff
+- [x] Activity log co ban
 
 ### 2.3 Vai tro nhan vien
 
-- `NV-01`: Da co
-  - Nhan vien dang nhap va vao dashboard rieng.
-- `NV-02`: Dat mot phan
-  - Co table overview va mau trang thai co ban.
-  - Chua co so khach, tong tien hien tai theo dung nghia session ban.
-- `NV-03`: Dat mot phan
-  - Da xem chi tiet order qua card.
-  - Chua co luong click vao ban de xem lich su/order day du.
-- `NV-04`: Chua dat
-  - Hien tai polling 5 giay, khong co WebSocket, am thanh, thong bao realtime.
-- `NV-05`: Dat mot phan
-  - Da doi trang thai order.
-- `NV-06`: Dat mot phan
-  - Da chon phuong thuc thanh toan.
-  - Chua tao QR dong theo tong tien.
-- `NV-07`: Chua co
-  - Chua co callback thanh toan/IPN.
-- `NV-08`: Chua co
-  - Chua in bill, chua in phieu bep.
-- `NV-09`: Chua co
-  - Chua co man hinh nhap mon thay khach.
+- [x] `NV-01` Dang nhap va vao dashboard rieng
+- [~] `NV-02` Xem table overview va mau trang thai co ban
+- [x] `NV-02` So khach theo ban
+- [x] `NV-02` Tong tien hien tai theo session ban
+- [~] `NV-03` Xem chi tiet order qua card
+- [x] `NV-03` Click vao ban de xem lich su / session / order co ban
+- [ ] `NV-04` Thong bao realtime bang WebSocket
+- [ ] `NV-04` Am thanh khi co order moi
+- [ ] `NV-05` Xac nhan da nhan / da chuyen bep dung luong nghiep vu
+- [~] `NV-05` Doi trang thai order co ban
+- [~] `NV-06` Chon phuong thuc thanh toan
+- [~] `NV-06` Tao QR dong theo tong tien o muc backend demo
+- [ ] `NV-07` Callback / IPN xac nhan thanh toan thanh cong
+- [x] `NV-08` In bill co ban
+- [x] `NV-08` In phieu bep co ban
+- [ ] `NV-09` Nhap mon thay khach
 
-## 3. Danh gia dung/sai so voi bao cao
+## 3. Hien trang Backend
 
-### Dung huong
+### 3.1 Kien truc va tach rieng he thong
 
-- Da tach giao dien theo 3 vai tro.
-- Da co huong tiep can web app/PWA, phu hop bai toan QR ordering.
-- Da co nhung luong cot loi muc MVP: xem menu, them gio, tao order, staff xu ly order, owner quan ly mon, tao QR.
+- [x] Co backend doc lap trong thu muc `Backend`
+- [x] Frontend goi backend qua base URL rieng
+- [~] Tach ro layer:
+  - auth
+  - tables
+  - menu
+  - sessions
+  - orders
+  - payments
+  - categories
+  - staff
+  - realtime
+- [~] Co env rieng cho frontend va backend
 
-### Chua dung hoac chua khop bao cao
+### 3.2 Auth va phan quyen
 
-- Bao cao quy dinh khach hang khong can login.
-  - Frontend ban dau bat khach login. Phan UI route nay da duoc dieu chinh lai.
-- Bao cao quy dinh admin va nhan vien moi login.
-  - Code auth va signup ban dau van cho phep `customer`.
-- Bao cao mo ta QR token ngau nhien.
-  - Hien tai QR la chuoi de doan `restaurantId|table_x`, chua an toan.
-- Bao cao mo ta luong realtime bang WebSocket.
-  - Hien tai chi polling 5 giay.
-- Bao cao mo ta phan tich/payments/backend tach ro.
-  - Hien tai du an van la frontend + API route, chua co backend doc lap.
+- [x] Co signin / signup API tren backend rieng
+- [x] Luong UI login da chinh lai theo huong chi staff va admin login
+- [ ] JWT auth dung cho admin / staff
+- [ ] Middleware / guard chan route theo role o muc server
+- [ ] Session khong phu thuoc `localStorage`
+- [ ] Refresh token / secure cookie / session management dung nghia
 
-## 4. Van de ky thuat can uu tien xu ly
+### 3.3 Database va schema
 
-### 4.1 Schema va code chua thong nhat
+- [x] Co file schema: [01-init-schema.sql](d:/Work/Restaurant_ordering_system/Frontend/scripts/01-init-schema.sql)
+- [x] Co file sample data: [02-sample-data.sql](d:/Work/Restaurant_ordering_system/Frontend/scripts/02-sample-data.sql)
+- [ ] Schema thong nhat voi `docs/bao-cao.txt`
+- [ ] Schema thong nhat voi code API hien tai
+- [x] Co `sessions` trong backend data model
+- [ ] Mau du lieu seed khop schema that su
+- [~] Backend doc lap da co seed rieng bang JSON store, chua phai migration/seed DB that su
 
-Co do lech giua 3 noi:
+### 3.4 API nghiep vu
 
-- `docs/bao-cao.txt`
-- `Frontend/scripts/01-init-schema.sql`
-- code API/frontend hien tai
+#### Public API cho khach
 
-Vi du:
+- [x] Co API lay menu
+- [x] Co API tao order
+- [x] API validate QR token an toan
+- [x] API lay session ban dang active
+- [x] API lich su mon da goi trong session
+- [x] API yeu cau thanh toan
 
-- Bao cao dung `tables`, `categories`, `products`, `sessions`; schema hien tai dung `dining_tables`, `menu_categories`, `menu_items`, khong co `sessions`.
-- API auth dang insert `name`, trong khi schema SQL dang co `full_name`.
-- API auth phu thuoc Supabase Auth, nhung schema `users` lai co cot `password_hash NOT NULL`, khong khop cach dang nhap dang ky hien tai.
-- `02-sample-data.sql` khong khop `01-init-schema.sql`:
-  - dung ID dang chuoi `rest-001`, `table-001` thay vi UUID
-  - insert cot `status` vao `dining_tables` trong khi schema khong co cot nay
-- API/analitycs/payments va mot so field order da tung khong khop schema; mot phan route da duoc chinh lai, nhung tong the van can chuan hoa.
+#### API cho nhan vien / admin
 
-### 4.2 Bao mat va phan quyen chua dung yeu cau
+- [x] Co API danh sach order cho staff
+- [x] Co API update trang thai order co ban
+- [x] Co API lay danh sach ban
+- [x] Co API tao them ban
+- [x] Co API owner menu CRUD co ban
+- [x] Co API owner analytics co ban
+- [x] Co API category CRUD co ban
+- [x] Co API owner quan ly order co ban
+- [x] Co API quan ly staff co ban
+- [x] API quan ly tables co tao, sua, xoa, reset co ban
+- [~] API quan ly categories day du
+- [~] API quan ly staff day du
 
-- Session dang giu bang `localStorage`, chua phai JWT auth cho admin/staff.
-- API route dang tao Supabase client bang `NEXT_PUBLIC_SUPABASE_ANON_KEY`, nghia la chua co server-side authorization dung muc.
-- Chua co middleware chan route theo role o muc server.
+### 3.5 Realtime
 
-### 4.3 Chua co backend doc lap
+- [ ] WebSocket / Socket.IO
+- [ ] Push order moi cho staff
+- [ ] Push order moi cho bep / KDS
+- [ ] Dong bo trang thai ban realtime
+- [ ] Dong bo tong tien theo session realtime
 
-- Thu muc `Backend` hien tai chua co implementation.
-- Chua co service cho auth, order, payment, realtime, webhook.
-- Chua co migration/seed/backend architecture theo dung roadmap trong bao cao.
+### 3.6 Thanh toan
 
-## 5. Tinh trang test/build hien tai
+- [~] Co API payment demo, muc dich chinh la danh dau thanh toan va dong session co ban
+- [ ] VietQR dong theo tong tien
+- [ ] MoMo Business API
+- [ ] IPN / callback verification
+- [ ] Tu dong xac nhan thanh toan thanh cong
+- [ ] Doi soat payment history
 
-- `npm.cmd run lint`: that bai vi project chua cai `eslint` du script da khai bao.
-- `npm.cmd run build`: sau khi sua import QR code, loi build con lai trong moi truong nay la do `next/font/google` can tai font `Geist`, nhung sandbox khong co internet.
+### 3.7 In bill / bep
+
+- [ ] In bill
+- [ ] In phieu bep
+- [ ] Tich hop may in nhiet
+
+## 4. Nhung diem da dung huong so voi bao cao
+
+- [x] Da tach giao dien theo 3 vai tro
+- [x] Da di theo huong web app / PWA cho bai toan QR ordering
+- [x] Da co mot phan luong MVP:
+  - xem menu
+  - them gio
+  - tao order
+  - staff xu ly order co ban
+  - owner quan ly mon
+  - tao QR
+- [x] Da sua UI de khach hang khong can login nua
+
+## 5. Nhung diem chua dung hoac chua khop bao cao
+
+- [x] QR token ngau nhien / an toan theo mo ta bao cao o muc backend demo
+- [ ] WebSocket realtime < 1 giay
+- [x] Session ban dung nghia o muc backend demo
+- [x] Backend doc lap
+- [ ] Payment callback / IPN
+- [ ] JWT auth cho admin / staff
+- [ ] Nhan vien khong duoc truy cap dashboard doanh thu bang server-side authorization
+- [x] In bill / in phieu bep o muc client print co ban
+- [ ] Dashboard day du theo ngay / tuan / thang / export
+
+## 6. No ky thuat uu tien xu ly
+
+### 6.1 Schema va code chua thong nhat
+
+- [ ] Thong nhat ten bang va ten cot giua bao cao, SQL va code
+- [ ] Xu ly lech `name` va `full_name`
+- [ ] Xu ly lech Supabase Auth va `password_hash NOT NULL`
+- [ ] Sua sample data cho khop schema
+- [ ] Chuan hoa order status, payment status, table status
+
+### 6.2 Bao mat va phan quyen
+
+- [ ] Bo `localStorage` lam session chinh cho staff/admin
+- [ ] Bo viec dung `NEXT_PUBLIC_SUPABASE_ANON_KEY` cho API server-side quan trong
+- [ ] Them middleware / authorization check o backend
+
+### 6.3 Tach rieng backend
+
+- [x] Tao skeleton backend trong thu muc `Backend`
+- [x] Chuyen cac API route nghiep vu chinh sang backend
+- [x] De frontend dong vai tro client UI cho flow chinh
+- [x] Tach code backend thanh `src/config`, `src/data`, `src/services`, `src/routes`, `src/utils`
+- [~] Tach seed / service sang backend; webhook / realtime chua co
+
+## 7. Tinh trang test/build hien tai
+
+- [ ] `npm.cmd run lint`
+  - That bai vi project chua cai `eslint` du script da khai bao
+- [~] `npm.cmd run build`
+  - Da build qua buoc compile sau khi bo Google Fonts online; loi con lai la `spawn EPERM` do moi truong hien tai
 
 Luu y:
 
-- Day la loi build trong moi truong khong co network, khong phai loi logic frontend chinh.
-- Tuy nhien project van con no ky thuat ve schema, auth va backend can giai quyet truoc khi xem la san sang production.
+- Loi build hien tai trong phien kiem tra nay chu yeu do moi truong khong co network
+- Nhung project van chua san sang production vi con no schema, auth, backend, realtime, payment
 
-## 6. Danh sach route frontend de test
+## 8. Danh sach route frontend de test
 
 ### Public / customer
 
-- `/`
-  - Landing page
-- `/customer`
-  - Trang order cua khach, khong can login
-- `/customer?restaurant=<restaurantId>&table=<tableId>`
-  - Vao thang menu cho mot ban cu the neu co query param
+- [x] `/`
+- [x] `/customer`
+- [x] `/customer?restaurant=<restaurantId>&table=<tableId>`
+- [x] `/customer?token=<qrToken>`
 
 ### Staff / admin
 
-- `/login`
-  - Login cho staff va admin
-- `/signup`
-  - Tao tai khoan staff/admin
-- `/staff`
-  - Dashboard nhan vien
-- `/owner`
-  - Dashboard chu quan/admin
-- `/owner/qr-codes`
-  - Quan ly QR code ban
+- [x] `/login`
+- [x] `/signup`
+- [x] `/staff`
+- [x] `/owner`
+- [x] `/owner/qr-codes`
 
-## 7. Goi y test nhanh hien tai
+## 9. Goi y test nhanh hien tai
 
-- Khach hang:
-  - Vao `/customer`
-  - Nhap QR dang `restaurantId|tableId`, vi du `rest-001|table_1`
-- Nhan vien:
-  - Dang nhap roi vao `/staff`
-  - Kiem tra tab Orders, Tables, Completed
-- Chu quan:
-  - Dang nhap roi vao `/owner`
-  - Kiem tra Dashboard, Menu Management, Settings
-  - Vao `/owner/qr-codes` de test QR
+### Khach hang
 
-## 8. Ket luan ngan
+- [x] Vao `/customer`
+- [x] Nhap QR dang `restaurantId|tableId`, vi du `rest-001|table_1`
+- [x] Test QR token an toan theo URL that su
+- [x] Test lich su order trong session
+- [x] Test yeu cau thanh toan
 
-Frontend hien tai da co bo khung MVP kha ro, nhung moi dung muc prototype/demo. Neu doi chieu nghiem tuc voi `docs/bao-cao.txt` thi du an moi dat mot phan cac yeu cau giao dien, chua dat phan backend, realtime, payment callback, session ban, bao mat va quan tri van hanh.
+### Nhan vien
+
+- [x] Dang nhap roi vao `/staff`
+- [x] Kiem tra tab Orders
+- [x] Kiem tra tab Tables
+- [x] Kiem tra tab Completed
+- [x] Click tung ban de xem chi tiet session/order
+- [ ] Test thong bao realtime
+- [x] Test QR thanh toan dong o muc link/QR demo
+- [x] Test in bill / in bep co ban
+
+### Chu quan
+
+- [x] Dang nhap roi vao `/owner`
+- [x] Kiem tra Dashboard
+- [x] Kiem tra Menu Management
+- [x] Kiem tra Category Management
+- [x] Kiem tra Order Management
+- [x] Kiem tra Staff Management
+- [x] Kiem tra Settings
+- [x] Vao `/owner/qr-codes` de test QR
+- [x] Test tao/sua/xoa/reset table va sinh QR co ban
+- [x] Test CRUD category co ban
+- [x] Test quan ly nhan vien co ban
+
+## 10. Ket luan ngan
+
+Project hien tai da co bo khung frontend kha ro va backend rieng o muc demo/co ban. Neu dung tai lieu nay de quan ly tien do thi:
+
+- Frontend: da co nen tang UI va nhieu flow MVP da noi sang backend moi
+- Backend: da co he thong doc lap cho auth, menu, tables, sessions, orders, payments, categories, staff, owner orders
+- Cac muc can uu tien nhat:
+  - chuan hoa schema
+  - lam auth dung
+  - realtime
+  - payment callback

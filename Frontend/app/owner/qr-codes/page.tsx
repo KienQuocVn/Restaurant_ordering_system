@@ -13,21 +13,33 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { apiUrl } from '@/lib/api'
 
 interface DiningTable {
   id: string
   table_number: number
+  qr_token: string
+  zone?: string
+  capacity?: number
+  guest_count?: number
+  status?: string
 }
 
 export default function QRCodesPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [origin, setOrigin] = useState('')
   const [tables, setTables] = useState<DiningTable[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selectedTable, setSelectedTable] = useState<DiningTable | null>(null)
   const [newTableCount, setNewTableCount] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingTable, setEditingTable] = useState<DiningTable | null>(null)
+
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
 
   // Check if user is logged in and is owner
   useEffect(() => {
@@ -44,13 +56,13 @@ export default function QRCodesPage() {
     }
 
     setUser(parsedUser)
-    loadTables(parsedUser.id)
+    loadTables(parsedUser.restaurant_id)
   }, [])
 
   const loadTables = async (restaurantId: string) => {
     try {
       const response = await fetch(
-        `/api/staff/tables?restaurant_id=${restaurantId}`
+        apiUrl(`/api/staff/tables?restaurant_id=${restaurantId}`)
       )
       if (!response.ok) throw new Error('Failed to load tables')
 
@@ -74,22 +86,21 @@ export default function QRCodesPage() {
     setError('')
 
     try {
-      // Create tables in database
-      const tablesToCreate = Array.from({ length: count }, (_, i) => ({
-        restaurant_id: user.id,
-        table_number: tables.length + i + 1,
-        status: 'available',
-      }))
+      const response = await fetch(apiUrl('/api/staff/tables'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId: user.restaurant_id,
+          count,
+        }),
+      })
 
-      // Note: In a real app, you would call an API route
-      // For now, we'll just create mock tables
-      setTables([
-        ...tables,
-        ...tablesToCreate.map((t, i) => ({
-          id: `table-${Date.now()}-${i}`,
-          table_number: t.table_number,
-        })),
-      ])
+      if (!response.ok) {
+        throw new Error('Failed to create tables')
+      }
+
+      const createdTables = await response.json()
+      setTables([...tables, ...createdTables])
 
       setNewTableCount('')
       setDialogOpen(false)
@@ -104,6 +115,77 @@ export default function QRCodesPage() {
   const handleLogout = () => {
     localStorage.removeItem('user')
     router.push('/login')
+  }
+
+  const handleUpdateTable = async () => {
+    if (!editingTable) return
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(apiUrl('/api/staff/tables'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableId: editingTable.id,
+          zone: editingTable.zone || 'Main',
+          capacity: editingTable.capacity || 4,
+          guestCount: editingTable.guest_count || 0,
+          status: editingTable.status || 'empty',
+        }),
+      })
+      if (!response.ok) throw new Error('Failed to update table')
+      await loadTables(user.restaurant_id)
+      setSelectedTable(editingTable)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to update table')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResetTable = async () => {
+    if (!selectedTable) return
+    setLoading(true)
+    try {
+      const response = await fetch(apiUrl('/api/staff/tables'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableId: selectedTable.id,
+          status: 'empty',
+          guestCount: 0,
+        }),
+      })
+      if (!response.ok) throw new Error('Failed to reset table')
+      await loadTables(user.restaurant_id)
+      setSelectedTable(null)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to reset table')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteTable = async () => {
+    if (!selectedTable) return
+    setLoading(true)
+    try {
+      const response = await fetch(
+        apiUrl(`/api/staff/tables?table_id=${selectedTable.id}`),
+        { method: 'DELETE' }
+      )
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to delete table')
+      await loadTables(user.restaurant_id)
+      setSelectedTable(null)
+    } catch (err) {
+      console.error(err)
+      setError('Failed to delete table')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (!user) {
@@ -163,7 +245,7 @@ export default function QRCodesPage() {
                 Back
               </Button>
               <QRCodeGenerator
-                restaurantId={user.id}
+                value={`${origin}/customer?token=${selectedTable.qr_token}`}
                 tableNumber={selectedTable.table_number}
                 size={300}
               />
@@ -180,10 +262,63 @@ export default function QRCodesPage() {
                     </p>
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Zone</p>
+                      <Input
+                        value={editingTable?.zone || ''}
+                        onChange={(e) =>
+                          setEditingTable((prev) =>
+                            prev ? { ...prev, zone: e.target.value } : prev
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Capacity</p>
+                      <Input
+                        type="number"
+                        value={editingTable?.capacity || 0}
+                        onChange={(e) =>
+                          setEditingTable((prev) =>
+                            prev
+                              ? { ...prev, capacity: parseInt(e.target.value) || 0 }
+                              : prev
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Guest count</p>
+                      <Input
+                        type="number"
+                        value={editingTable?.guest_count || 0}
+                        onChange={(e) =>
+                          setEditingTable((prev) =>
+                            prev
+                              ? { ...prev, guest_count: parseInt(e.target.value) || 0 }
+                              : prev
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Status</p>
+                      <Input
+                        value={editingTable?.status || 'empty'}
+                        onChange={(e) =>
+                          setEditingTable((prev) =>
+                            prev ? { ...prev, status: e.target.value } : prev
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <p className="text-sm text-gray-600">QR Code Data</p>
+                    <p className="text-sm text-gray-600">QR Code URL</p>
                     <p className="text-sm bg-gray-50 p-2 rounded break-all">
-                      {user.id}|table_{selectedTable.table_number}
+                      {origin}/customer?token={selectedTable.qr_token}
                     </p>
                   </div>
 
@@ -195,6 +330,30 @@ export default function QRCodesPage() {
                       <li>Mount on the table</li>
                       <li>Customers scan to order</li>
                     </ul>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button
+                      onClick={handleUpdateTable}
+                      disabled={loading}
+                      className="bg-[#2ad38b] hover:bg-[#0cceb0]"
+                    >
+                      Save Table
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleResetTable}
+                      disabled={loading}
+                    >
+                      Reset Table
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteTable}
+                      disabled={loading}
+                    >
+                      Delete Table
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -214,7 +373,10 @@ export default function QRCodesPage() {
                 tables.map((table) => (
                   <button
                     key={table.id}
-                    onClick={() => setSelectedTable(table)}
+                    onClick={() => {
+                      setSelectedTable(table)
+                      setEditingTable(table)
+                    }}
                     className="p-4 bg-white rounded-lg border-2 border-gray-300 hover:border-[#2ad38b] hover:bg-green-50 transition-colors font-medium text-center"
                   >
                     Table {table.table_number}

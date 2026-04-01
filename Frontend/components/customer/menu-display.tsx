@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { formatCurrency } from '@/lib/api'
 
 interface MenuItem {
   id: string
@@ -94,7 +95,7 @@ export function MenuDisplay({ categories, items, onAddToCart, loading }: MenuDis
                   <p className="text-sm text-gray-600">{item.description}</p>
                 </div>
                 <span className="text-lg font-bold text-[#2ad38b]">
-                  ${item.price.toFixed(2)}
+                  {formatCurrency(item.price)}
                 </span>
               </div>
 
@@ -137,3 +138,8 @@ export function MenuDisplay({ categories, items, onAddToCart, loading }: MenuDis
     </div>
   )
 }
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(categories[0].id)
+    }
+  }, [categories, selectedCategory])

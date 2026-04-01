@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { QRScanner } from '@/components/customer/qr-scanner'
 import { MenuDisplay } from '@/components/customer/menu-display'
 import { Cart } from '@/components/customer/cart'
+import { apiUrl, formatCurrency } from '@/lib/api'
 
 interface MenuItem {
   id: string
@@ -27,28 +28,53 @@ interface CartItem {
   name: string
   price: number
   quantity: number
+  note?: string
+}
+
+interface SessionOrder {
+  id: string
+  status: string
+  total_amount: number
+  created_at: string
+  order_items: Array<{
+    id: string
+    quantity: number
+    unit_price: number
+    special_instructions?: string
+    menu_items: {
+      name: string
+    }
+  }>
 }
 
 export default function CustomerPage() {
   const searchParams = useSearchParams()
   const [step, setStep] = useState<'scan' | 'menu' | 'confirmation'>('scan')
+  const [tableToken, setTableToken] = useState('')
   const [restaurantId, setRestaurantId] = useState('')
   const [tableId, setTableId] = useState('')
+  const [tableNumber, setTableNumber] = useState<number | null>(null)
   const [categories, setCategories] = useState<MenuCategory[]>([])
   const [items, setItems] = useState<MenuItem[]>([])
   const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [notes, setNotes] = useState('')
+  const [session, setSession] = useState<any>(null)
+  const [sessionOrders, setSessionOrders] = useState<SessionOrder[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
+    const token = searchParams.get('token')
     const restaurantParam = searchParams.get('restaurant')
     const tableParam = searchParams.get('table')
 
+    if (token) {
+      resolveToken(token)
+      return
+    }
+
     if (restaurantParam && tableParam) {
-      setRestaurantId(restaurantParam)
-      setTableId(tableParam)
-      setStep('menu')
+      loadTableContext({ restaurantId: restaurantParam, tableId: tableParam })
     }
   }, [searchParams])
 
@@ -60,7 +86,9 @@ export default function CustomerPage() {
       setLoading(true)
       setError('')
       try {
-        const response = await fetch(`/api/menu?restaurant_id=${restaurantId}`)
+        const response = await fetch(
+          apiUrl(`/api/menu?restaurant_id=${restaurantId}`)
+        )
         if (!response.ok) throw new Error('Failed to load menu')
 
         const data = await response.json()
@@ -77,10 +105,73 @@ export default function CustomerPage() {
     loadMenu()
   }, [restaurantId])
 
-  const handleQRScan = (scannedRestaurantId: string, scannedTableId: string) => {
-    setRestaurantId(scannedRestaurantId)
-    setTableId(scannedTableId)
+  useEffect(() => {
+    if (!tableId) return
+    loadCurrentSession(tableId)
+  }, [tableId])
+
+  const loadTableContext = async (payload: {
+    token?: string
+    restaurantId?: string
+    tableId?: string
+  }) => {
+    if (payload.token) {
+      await resolveToken(payload.token)
+      return
+    }
+
+    if (!payload.restaurantId || !payload.tableId) return
+
+    setRestaurantId(payload.restaurantId)
+    setTableId(payload.tableId)
+    setTableToken('')
+    setTableNumber(null)
     setStep('menu')
+  }
+
+  const resolveToken = async (token: string) => {
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(apiUrl(`/api/public/table?token=${token}`))
+      if (!response.ok) throw new Error('Invalid QR token')
+
+      const data = await response.json()
+      setTableToken(token)
+      setRestaurantId(data.table.restaurant_id)
+      setTableId(data.table.id)
+      setTableNumber(data.table.table_number)
+      setSession(data.session)
+      setSessionOrders(data.orders || [])
+      setStep('menu')
+    } catch (err) {
+      setError('Khong tim thay thong tin ban tu QR code.')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadCurrentSession = async (currentTableId: string) => {
+    try {
+      const response = await fetch(
+        apiUrl(`/api/sessions/current?table_id=${currentTableId}`)
+      )
+      if (!response.ok) throw new Error('Failed to load session')
+      const data = await response.json()
+      setSession(data.session)
+      setSessionOrders(data.orders || [])
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleQRScan = async (payload: {
+    token?: string
+    restaurantId?: string
+    tableId?: string
+  }) => {
+    await loadTableContext(payload)
   }
 
   const handleAddToCart = (item: MenuItem, quantity: number) => {
@@ -115,6 +206,12 @@ export default function CustomerPage() {
     setCartItems((prev) => prev.filter((item) => item.id !== itemId))
   }
 
+  const handleUpdateItemNote = (itemId: string, note: string) => {
+    setCartItems((prev) =>
+      prev.map((item) => (item.id === itemId ? { ...item, note } : item))
+    )
+  }
+
   const handleCheckout = async () => {
     if (cartItems.length === 0) return
 
@@ -127,16 +224,18 @@ export default function CustomerPage() {
         0
       )
 
-      const response = await fetch('/api/orders', {
+      const response = await fetch(apiUrl('/api/orders'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: null,
           restaurantId,
           tableId,
           items: cartItems.map((item) => ({
             id: item.id,
             quantity: item.quantity,
             price: item.price,
+            note: item.note || '',
           })),
           totalAmount,
           notes,
@@ -153,6 +252,7 @@ export default function CustomerPage() {
       setStep('confirmation')
       setCartItems([])
       setNotes('')
+      await loadCurrentSession(tableId)
 
       // Redirect after 3 seconds
       setTimeout(() => {
@@ -166,6 +266,33 @@ export default function CustomerPage() {
     }
   }
 
+  const handleRequestPayment = async () => {
+    if (!session?.id) return
+
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(apiUrl('/api/sessions/payment-request'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.id }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        setError(data.error || 'Khong the gui yeu cau thanh toan')
+        return
+      }
+
+      setSession(data.session)
+    } catch (err) {
+      setError('Khong the gui yeu cau thanh toan')
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -173,11 +300,25 @@ export default function CustomerPage() {
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-[#2ad38b]">Order System</h1>
           <div className="flex items-center gap-2">
-            {tableId && (
-              <span className="text-sm text-gray-600">Table: {tableId}</span>
+            {(tableNumber || tableId) && (
+              <span className="text-sm text-gray-600">
+                Table: {tableNumber ?? tableId}
+              </span>
             )}
             {step !== 'scan' && (
-              <Button onClick={() => setStep('scan')} variant="outline" size="sm">
+              <Button
+                onClick={() => {
+                  setStep('scan')
+                  setRestaurantId('')
+                  setTableId('')
+                  setTableToken('')
+                  setTableNumber(null)
+                  setSession(null)
+                  setSessionOrders([])
+                }}
+                variant="outline"
+                size="sm"
+              >
                 Change Table
               </Button>
             )}
@@ -198,6 +339,32 @@ export default function CustomerPage() {
                   {error}
                 </div>
               )}
+
+              {session && (
+                <div className="bg-white border rounded-lg p-4 mb-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h2 className="font-semibold text-lg">Current Table Session</h2>
+                      <p className="text-sm text-gray-600">
+                        Status: {session.status}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Total ordered: {formatCurrency(session.total_amount)}
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleRequestPayment}
+                      variant="outline"
+                      disabled={loading || session.status === 'payment_requested'}
+                    >
+                      {session.status === 'payment_requested'
+                        ? 'Payment Requested'
+                        : 'Request Payment'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <MenuDisplay
                 categories={categories}
                 items={items}
@@ -206,16 +373,56 @@ export default function CustomerPage() {
               />
             </div>
 
-            <div>
+            <div className="space-y-6">
               <Cart
                 items={cartItems}
                 onUpdateQuantity={handleUpdateQuantity}
+                onUpdateNote={handleUpdateItemNote}
                 onRemoveItem={handleRemoveItem}
                 onCheckout={handleCheckout}
                 loading={loading}
                 notes={notes}
                 onNotesChange={setNotes}
               />
+
+              <div className="bg-white border rounded-lg p-4">
+                <h3 className="font-semibold text-lg mb-3">Ordered In This Session</h3>
+                {sessionOrders.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No orders yet for this table session.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {sessionOrders.map((order) => (
+                      <div key={order.id} className="border rounded p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">
+                            {new Date(order.created_at).toLocaleTimeString()}
+                          </span>
+                          <span className="text-xs uppercase text-gray-500">
+                            {order.status}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          {order.order_items.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span>
+                                {item.quantity}x {item.menu_items.name}
+                              </span>
+                              <span>
+                                {formatCurrency(item.quantity * item.unit_price)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ) : (

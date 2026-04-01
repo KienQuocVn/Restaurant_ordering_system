@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { OrderCard } from '@/components/staff/order-card'
 import { PaymentDialog } from '@/components/staff/payment-dialog'
+import { apiUrl, formatCurrency } from '@/lib/api'
 
 interface OrderItem {
   id: string
@@ -19,6 +20,7 @@ interface OrderItem {
 
 interface Order {
   id: string
+  session_id: string
   table_id: string
   status: string
   total_amount: number
@@ -32,6 +34,11 @@ interface Order {
 interface DiningTable {
   id: string
   table_number: number
+  session?: {
+    id: string
+    status: string
+    total_amount: number
+  } | null
   orders: Order[]
 }
 
@@ -48,7 +55,9 @@ export default function StaffPage() {
     orderId: '',
     tableNumber: 0,
     totalAmount: 0,
+    qrCodeUrl: '',
   })
+  const [selectedTable, setSelectedTable] = useState<DiningTable | null>(null)
 
   // Check if user is logged in and is staff
   useEffect(() => {
@@ -79,7 +88,9 @@ export default function StaffPage() {
 
   const loadOrders = async (restaurantId: string) => {
     try {
-      const response = await fetch(`/api/staff/orders?restaurant_id=${restaurantId}`)
+      const response = await fetch(
+        apiUrl(`/api/staff/orders?restaurant_id=${restaurantId}`)
+      )
       if (!response.ok) throw new Error('Failed to load orders')
 
       const data = await response.json()
@@ -93,7 +104,7 @@ export default function StaffPage() {
 
   const loadTables = async (restaurantId: string) => {
     try {
-      const response = await fetch(`/api/staff/tables?restaurant_id=${restaurantId}`)
+      const response = await fetch(apiUrl(`/api/staff/tables?restaurant_id=${restaurantId}`))
       if (!response.ok) throw new Error('Failed to load tables')
 
       const data = await response.json()
@@ -106,7 +117,7 @@ export default function StaffPage() {
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     setLoading(true)
     try {
-      const response = await fetch('/api/staff/orders', {
+      const response = await fetch(apiUrl('/api/staff/orders'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, status: newStatus }),
@@ -132,13 +143,14 @@ export default function StaffPage() {
       orderId: order.id,
       tableNumber: order.dining_tables.table_number,
       totalAmount: order.total_amount,
+      qrCodeUrl: '',
     })
   }
 
   const handlePaymentSubmit = async (paymentMethod: string) => {
     setLoading(true)
     try {
-      const response = await fetch('/api/payments', {
+      const response = await fetch(apiUrl('/api/payments'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -150,12 +162,27 @@ export default function StaffPage() {
 
       if (!response.ok) throw new Error('Failed to process payment')
 
+      const data = await response.json()
+
       if (user) {
         loadOrders(user.restaurant_id)
         loadTables(user.restaurant_id)
       }
 
-      setPaymentDialog({ open: false, orderId: '', tableNumber: 0, totalAmount: 0 })
+      if (data.payment?.qr_code_url) {
+        setPaymentDialog((prev) => ({
+          ...prev,
+          qrCodeUrl: data.payment?.qr_code_url || '',
+        }))
+      } else {
+        setPaymentDialog({
+          open: false,
+          orderId: '',
+          tableNumber: 0,
+          totalAmount: 0,
+          qrCodeUrl: '',
+        })
+      }
     } catch (err) {
       console.error('Error processing payment:', err)
       setError('Failed to process payment')
@@ -167,6 +194,80 @@ export default function StaffPage() {
   const handleLogout = () => {
     localStorage.removeItem('user')
     router.push('/login')
+  }
+
+  const printHtml = (title: string, body: string) => {
+    const popup = window.open('', '_blank', 'width=800,height=600')
+    if (!popup) return
+    popup.document.write(`
+      <html>
+        <head>
+          <title>${title}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; }
+            h1,h2,p { margin: 0 0 8px; }
+            .section { margin-bottom: 16px; }
+            .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+          </style>
+        </head>
+        <body>${body}</body>
+      </html>
+    `)
+    popup.document.close()
+    popup.focus()
+    popup.print()
+  }
+
+  const handlePrintBill = (order: Order) => {
+    const items = order.order_items
+      .map(
+        (item) =>
+          `<div class="row"><span>${item.quantity}x ${item.menu_items.name}</span><span>${formatCurrency(
+            item.quantity * item.unit_price
+          )}</span></div>`
+      )
+      .join('')
+
+    printHtml(
+      `Bill - Table ${order.dining_tables.table_number}`,
+      `
+        <h1>Customer Bill</h1>
+        <div class="section">
+          <p>Table: ${order.dining_tables.table_number}</p>
+          <p>Status: ${order.status}</p>
+          <p>Time: ${new Date(order.created_at).toLocaleString()}</p>
+        </div>
+        <div class="section">${items}</div>
+        <hr />
+        <div class="row"><strong>Total</strong><strong>${formatCurrency(
+          order.total_amount
+        )}</strong></div>
+      `
+    )
+  }
+
+  const handlePrintKitchenSlip = (order: Order) => {
+    const items = order.order_items
+      .map(
+        (item) =>
+          `<div class="row"><span>${item.quantity}x ${item.menu_items.name}</span><span>${
+            item.special_instructions || ''
+          }</span></div>`
+      )
+      .join('')
+
+    printHtml(
+      `Kitchen Slip - Table ${order.dining_tables.table_number}`,
+      `
+        <h1>Kitchen Slip</h1>
+        <div class="section">
+          <p>Table: ${order.dining_tables.table_number}</p>
+          <p>Order: ${order.id}</p>
+          <p>Time: ${new Date(order.created_at).toLocaleString()}</p>
+        </div>
+        <div class="section">${items}</div>
+      `
+    )
   }
 
   if (!user) {
@@ -250,6 +351,8 @@ export default function StaffPage() {
                       totalAmount={order.total_amount}
                       createdAt={order.created_at}
                       onStatusChange={handleStatusChange}
+                      onPrintBill={() => handlePrintBill(order)}
+                      onPrintKitchenSlip={() => handlePrintKitchenSlip(order)}
                       loading={loading}
                     />
                   ))}
@@ -273,6 +376,8 @@ export default function StaffPage() {
                         totalAmount={order.total_amount}
                         createdAt={order.created_at}
                         onStatusChange={handleStatusChange}
+                        onPrintBill={() => handlePrintBill(order)}
+                        onPrintKitchenSlip={() => handlePrintKitchenSlip(order)}
                         loading={loading}
                       />
                       <Button
@@ -299,12 +404,14 @@ export default function StaffPage() {
                   pending: 'bg-yellow-100 border-yellow-300',
                   preparing: 'bg-blue-100 border-blue-300',
                   completed: 'bg-green-100 border-green-300',
+                  payment_requested: 'bg-orange-100 border-orange-300',
                   empty: 'bg-white border-gray-300',
                 }
 
                 return (
                   <div
                     key={table.id}
+                    onClick={() => setSelectedTable(table)}
                     className={`p-4 rounded-lg border-2 text-center ${
                       latestOrder
                         ? statusColors[latestOrder.status] || statusColors.empty
@@ -318,7 +425,9 @@ export default function StaffPage() {
                           {latestOrder.status.replace('_', ' ').toUpperCase()}
                         </p>
                         <p className="text-lg font-bold mt-1">
-                          ${latestOrder.total_amount.toFixed(2)}
+                          {formatCurrency(
+                            table.session?.total_amount || latestOrder.total_amount
+                          )}
                         </p>
                       </>
                     ) : (
@@ -328,6 +437,74 @@ export default function StaffPage() {
                 )
               })}
             </div>
+
+            {selectedTable && (
+              <div className="mt-6 rounded-lg border bg-white p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold">
+                    Table {selectedTable.table_number} details
+                  </h4>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedTable(null)}
+                  >
+                    Close
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="rounded border bg-gray-50 p-3">
+                    <p className="text-sm text-gray-500">Session status</p>
+                    <p className="font-medium">
+                      {selectedTable.session?.status || 'empty'}
+                    </p>
+                  </div>
+                  <div className="rounded border bg-gray-50 p-3">
+                    <p className="text-sm text-gray-500">Current total</p>
+                    <p className="font-medium">
+                      {formatCurrency(selectedTable.session?.total_amount || 0)}
+                    </p>
+                  </div>
+                  <div className="rounded border bg-gray-50 p-3">
+                    <p className="text-sm text-gray-500">Guest count</p>
+                    <p className="font-medium">{(selectedTable as any).guest_count || 0}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {selectedTable.orders.length === 0 ? (
+                    <p className="text-sm text-gray-500">No orders for this table</p>
+                  ) : (
+                    selectedTable.orders.map((order) => (
+                      <div key={order.id} className="rounded border p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium">{order.status}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(order.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          {order.order_items.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex justify-between text-sm"
+                            >
+                              <span>
+                                {item.quantity}x {item.menu_items.name}
+                              </span>
+                              <span>
+                                {formatCurrency(item.quantity * item.unit_price)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           {/* Completed Tab */}
@@ -347,6 +524,8 @@ export default function StaffPage() {
                     totalAmount={order.total_amount}
                     createdAt={order.created_at}
                     onStatusChange={handleStatusChange}
+                    onPrintBill={() => handlePrintBill(order)}
+                    onPrintKitchenSlip={() => handlePrintKitchenSlip(order)}
                     loading={loading}
                   />
                 ))}
@@ -362,8 +541,15 @@ export default function StaffPage() {
         orderId={paymentDialog.orderId}
         tableNumber={paymentDialog.tableNumber}
         totalAmount={paymentDialog.totalAmount}
+        qrCodeUrl={paymentDialog.qrCodeUrl}
         onClose={() =>
-          setPaymentDialog({ open: false, orderId: '', tableNumber: 0, totalAmount: 0 })
+          setPaymentDialog({
+            open: false,
+            orderId: '',
+            tableNumber: 0,
+            totalAmount: 0,
+            qrCodeUrl: '',
+          })
         }
         onPaymentSubmit={handlePaymentSubmit}
         loading={loading}
