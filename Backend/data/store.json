@@ -31,13 +31,13 @@
       "created_at": "2026-04-01T08:20:13.423Z"
     },
     {
+      "is_active": true,
       "id": "user_c166f78161ac6e48",
       "email": "kieukienquocvn@gmail.com",
       "password_hash": "ef797c8118f02dfb649607dd5d3f8c7623048c9c063d532cc95c5ed7a898a64f",
       "name": "Kiều Kiến Quốc",
       "role": "owner",
       "restaurant_id": "rest_1cb89f7bac90713e",
-      "is_active": true,
       "created_at": "2026-04-01T08:32:27.708Z"
     }
   ],
@@ -168,16 +168,17 @@
   ],
   "orders": [
     {
+      "cancel_reason": "",
       "id": "order_d7d11a0107759b54",
       "session_id": "session_d684554ef16648c3",
       "restaurant_id": "rest_demo_001",
       "table_id": "table_86391ca0ce26b5cc",
       "customer_id": null,
-      "status": "pending",
+      "status": "completed",
       "total_amount": 10000,
       "notes": "test order",
       "created_at": "2026-04-01T08:04:42.653Z",
-      "confirmed_at": null
+      "confirmed_at": "2026-04-01T09:13:29.825Z"
     }
   ],
   "order_items": [

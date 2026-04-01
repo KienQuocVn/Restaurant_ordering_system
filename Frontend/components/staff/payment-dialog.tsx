@@ -4,12 +4,11 @@ import { useState } from 'react'
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/api'
 
 interface PaymentDialogProps {
@@ -25,7 +24,6 @@ interface PaymentDialogProps {
 
 export function PaymentDialog({
   open,
-  orderId,
   tableNumber,
   totalAmount,
   qrCodeUrl,
@@ -36,33 +34,16 @@ export function PaymentDialog({
   const [selectedMethod, setSelectedMethod] = useState<string>('')
 
   const paymentMethods = [
-    {
-      id: 'cash',
-      name: 'Cash',
-      icon: '💵',
-    },
-    {
-      id: 'card',
-      name: 'Card',
-      icon: '💳',
-    },
-    {
-      id: 'momo',
-      name: 'Mobile Money',
-      icon: '📱',
-    },
-    {
-      id: 'bank_transfer',
-      name: 'Bank Transfer',
-      icon: '🏦',
-    },
+    { id: 'cash', name: 'Cash', code: 'CS' },
+    { id: 'card', name: 'Card', code: 'CD' },
+    { id: 'momo', name: 'Mobile Money', code: 'MM' },
+    { id: 'bank_transfer', name: 'Bank Transfer', code: 'BK' },
   ]
 
   const handleSubmit = () => {
-    if (selectedMethod) {
-      onPaymentSubmit(selectedMethod)
-      setSelectedMethod('')
-    }
+    if (!selectedMethod) return
+    onPaymentSubmit(selectedMethod)
+    setSelectedMethod('')
   }
 
   return (
@@ -94,10 +75,10 @@ export function PaymentDialog({
                   }`}
                   disabled={loading}
                 >
-                  <span className="text-2xl">{method.icon}</span>
-                  <span className="text-xs font-medium text-center">
-                    {method.name}
+                  <span className="rounded-full bg-white px-2 py-1 text-xs font-bold shadow-sm">
+                    {method.code}
                   </span>
+                  <span className="text-xs font-medium text-center">{method.name}</span>
                 </button>
               ))}
             </div>

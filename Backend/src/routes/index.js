@@ -1,5 +1,7 @@
 const { readStore, writeStore, hashPassword, createId, isoNow } = require('../data/store')
 const { parseBody, sendJson, notFound } = require('../utils/http')
+const { signJwt, verifyJwt, getBearerToken } = require('../utils/auth')
+const { subscribe, publishRestaurantEvent } = require('../realtime')
 const {
   getActiveSession,
   getSessionOrders,
@@ -8,6 +10,82 @@ const {
   logActivity,
   createUser,
 } = require('../services/business')
+
+function requireAuth(req, res, allowedRoles = []) {
+  const token = getBearerToken(req)
+  const payload = verifyJwt(token)
+  if (!payload?.sub) {
+    sendJson(res, 401, { error: 'Unauthorized' })
+    return null
+  }
+
+  const data = readStore()
+  const user = data.users.find((item) => item.id === payload.sub && item.is_active !== false)
+  if (!user) {
+    sendJson(res, 401, { error: 'Unauthorized' })
+    return null
+  }
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
+    sendJson(res, 403, { error: 'Forbidden' })
+    return null
+  }
+
+  req.authUser = user
+  return user
+}
+
+function requirePermission(req, res, permission) {
+  const user = req.authUser
+  if (!user) {
+    sendJson(res, 401, { error: 'Unauthorized' })
+    return false
+  }
+
+  if (user.role === 'owner') {
+    return true
+  }
+
+  if (user.permissions?.[permission]) {
+    return true
+  }
+
+  sendJson(res, 403, { error: `Missing permission: ${permission}` })
+  return false
+}
+
+function isInRange(value, range) {
+  if (range === 'all') return true
+  const date = new Date(value)
+  const now = new Date()
+  const start = new Date(now)
+
+  if (range === 'today') {
+    start.setHours(0, 0, 0, 0)
+    return date >= start
+  }
+
+  if (range === 'week') {
+    const day = start.getDay()
+    const diff = day === 0 ? 6 : day - 1
+    start.setDate(start.getDate() - diff)
+    start.setHours(0, 0, 0, 0)
+    return date >= start
+  }
+
+  if (range === 'month') {
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+    return date >= start
+  }
+
+  return true
+}
+
+function formatDateLabel(value) {
+  const date = new Date(value)
+  return date.toISOString().slice(0, 10)
+}
 
 async function handleAuthSignup(req, res) {
   const body = await parseBody(req)
@@ -41,14 +119,22 @@ async function handleAuthSignin(req, res) {
     return sendJson(res, 401, { error: 'Invalid credentials' })
   }
 
+  const token = signJwt({
+    sub: user.id,
+    role: user.role,
+    restaurant_id: user.restaurant_id,
+  })
+
   return sendJson(res, 200, {
     success: true,
+    token,
     user: {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
       restaurant_id: user.restaurant_id,
+      permissions: user.permissions || {},
       created_at: user.created_at,
     },
   })
@@ -104,6 +190,15 @@ async function handlePaymentRequest(req, res) {
   const table = data.tables.find((item) => item.id === session.table_id)
   if (table) table.status = 'payment_requested'
   writeStore(data)
+  publishRestaurantEvent(session.restaurant_id, 'session.updated', {
+    type: 'session.updated',
+    restaurantId: session.restaurant_id,
+    tableId: session.table_id,
+    sessionId: session.id,
+    sessionStatus: session.status,
+    tableStatus: table?.status || null,
+    totalAmount: session.total_amount,
+  })
   return sendJson(res, 200, { success: true, session })
 }
 
@@ -134,14 +229,15 @@ async function handleCreateOrder(req, res) {
   const orderId = createId('order')
   let totalAmount = 0
   const orderItems = items.map((item) => {
-    const menuItem = data.menu_items.find((menu) => menu.id === item.id)
+    const menuItemId = item.menuItemId || item.id
+    const menuItem = data.menu_items.find((menu) => menu.id === menuItemId)
     const unitPrice = Number(item.price || menuItem?.price || 0)
     const quantity = Number(item.quantity || 0)
     totalAmount += unitPrice * quantity
     return {
       id: createId('order_item'),
       order_id: orderId,
-      menu_item_id: item.id,
+      menu_item_id: menuItemId,
       product_name: menuItem?.name || item.name || 'Unknown Item',
       unit_price: unitPrice,
       quantity,
@@ -171,6 +267,24 @@ async function handleCreateOrder(req, res) {
   table.status = 'occupied'
   table.guest_count = Math.max(table.guest_count || 0, 1)
   writeStore(data)
+  publishRestaurantEvent(restaurantId, 'order.created', {
+    type: 'order.created',
+    restaurantId,
+    tableId,
+    sessionId: session.id,
+    orderId: order.id,
+    tableNumber: table.table_number,
+    totalAmount: order.total_amount,
+    createdAt: order.created_at,
+  })
+  publishRestaurantEvent(restaurantId, 'table.updated', {
+    type: 'table.updated',
+    restaurantId,
+    tableId,
+    tableNumber: table.table_number,
+    tableStatus: table.status,
+    sessionId: session.id,
+  })
   return sendJson(res, 201, { success: true, order, session })
 }
 
@@ -232,6 +346,15 @@ async function handlePatchStaffOrders(req, res) {
   order.status = status
   if (status === 'preparing' && !order.confirmed_at) order.confirmed_at = isoNow()
   writeStore(data)
+  publishRestaurantEvent(order.restaurant_id, 'order.updated', {
+    type: 'order.updated',
+    restaurantId: order.restaurant_id,
+    tableId: order.table_id,
+    sessionId: order.session_id,
+    orderId: order.id,
+    status: order.status,
+    confirmedAt: order.confirmed_at,
+  })
   return sendJson(res, 200, { success: true, order })
 }
 
@@ -276,6 +399,14 @@ async function handleUpdateTable(req, res) {
   if (status !== undefined) table.status = status
   if (guestCount !== undefined) table.guest_count = Number(guestCount)
   writeStore(data)
+  publishRestaurantEvent(table.restaurant_id, 'table.updated', {
+    type: 'table.updated',
+    restaurantId: table.restaurant_id,
+    tableId: table.id,
+    tableNumber: table.table_number,
+    tableStatus: table.status,
+    guestCount: table.guest_count,
+  })
   return sendJson(res, 200, { success: true, table })
 }
 
@@ -323,7 +454,7 @@ async function handleOwnerMenuPost(req, res) {
     description: payload.description || '',
     price: Number(payload.price || 0),
     image_url: payload.imageUrl || '',
-    is_available: true,
+    is_available: payload.isAvailable !== false,
     display_order: payload.displayOrder || store.menu_items.length + 1,
     options: payload.options || [],
   }
@@ -342,7 +473,11 @@ async function handleOwnerMenuPatch(req, res) {
   item.name = payload.name
   item.description = payload.description || ''
   item.price = Number(payload.price || 0)
-  item.is_available = payload.isAvailable
+  item.category_id = payload.categoryId || item.category_id
+  item.image_url = payload.imageUrl || ''
+  item.options = payload.options || []
+  item.display_order = Number(payload.displayOrder || item.display_order || 0)
+  item.is_available = payload.isAvailable !== false
   writeStore(store)
   return sendJson(res, 200, { success: true, item })
 }
@@ -385,14 +520,32 @@ async function handleOwnerCategoriesPost(req, res) {
 
 async function handleOwnerCategoriesPatch(req, res) {
   const body = await parseBody(req)
-  const { categoryId, name, isActive } = body
+  const { categoryId, name, isActive, sortOrder } = body
   const data = readStore()
   const category = data.categories.find((item) => item.id === categoryId)
   if (!category) return sendJson(res, 404, { error: 'Category not found' })
   if (name !== undefined) category.name = name
   if (isActive !== undefined) category.is_active = isActive
+  if (sortOrder !== undefined) category.sort_order = Number(sortOrder)
   writeStore(data)
   return sendJson(res, 200, { success: true, category })
+}
+
+async function handleOwnerCategoriesReorder(req, res) {
+  const body = await parseBody(req)
+  const { restaurantId, categoryIds } = body
+  if (!restaurantId || !Array.isArray(categoryIds) || categoryIds.length === 0) {
+    return sendJson(res, 400, { error: 'Restaurant ID and categoryIds are required' })
+  }
+
+  const data = readStore()
+  const scoped = data.categories.filter((item) => item.restaurant_id === restaurantId)
+  categoryIds.forEach((categoryId, index) => {
+    const category = scoped.find((item) => item.id === categoryId)
+    if (category) category.sort_order = index + 1
+  })
+  writeStore(data)
+  return sendJson(res, 200, { success: true })
 }
 
 function handleOwnerCategoriesDelete(req, res, url) {
@@ -425,6 +578,15 @@ async function handleOwnerOrdersPatch(req, res) {
   if (cancelReason !== undefined) order.cancel_reason = cancelReason
   recalculateSessionTotals(data, order.session_id)
   writeStore(data)
+  publishRestaurantEvent(order.restaurant_id, 'order.updated', {
+    type: 'order.updated',
+    restaurantId: order.restaurant_id,
+    tableId: order.table_id,
+    sessionId: order.session_id,
+    orderId: order.id,
+    status: order.status,
+    cancelReason: order.cancel_reason,
+  })
   return sendJson(res, 200, { success: true, order })
 }
 
@@ -460,14 +622,37 @@ async function handleOwnerStaffPost(req, res) {
 
 async function handleOwnerStaffPatch(req, res) {
   const body = await parseBody(req)
-  const { staffId, name, isActive } = body
+  const { staffId, name, isActive, permissions } = body
   const data = readStore()
   const staff = data.users.find((user) => user.id === staffId && user.role === 'staff')
   if (!staff) return sendJson(res, 404, { error: 'Staff not found' })
   if (name !== undefined) staff.name = name
   if (isActive !== undefined) staff.is_active = isActive
+  if (permissions && typeof permissions === 'object') {
+    staff.permissions = {
+      ...(staff.permissions || {}),
+      ...permissions,
+    }
+  }
   writeStore(data)
   return sendJson(res, 200, { success: true, staff })
+}
+
+async function handleOwnerMenuReorder(req, res) {
+  const body = await parseBody(req)
+  const { restaurantId, itemIds } = body
+  if (!restaurantId || !Array.isArray(itemIds) || itemIds.length === 0) {
+    return sendJson(res, 400, { error: 'Restaurant ID and itemIds are required' })
+  }
+
+  const store = readStore()
+  const scoped = store.menu_items.filter((item) => item.restaurant_id === restaurantId)
+  itemIds.forEach((itemId, index) => {
+    const item = scoped.find((entry) => entry.id === itemId)
+    if (item) item.display_order = index + 1
+  })
+  writeStore(store)
+  return sendJson(res, 200, { success: true })
 }
 
 function handleOwnerStaffDelete(req, res, url) {
@@ -529,6 +714,24 @@ async function handlePayments(req, res) {
       if (item.status !== 'cancelled') item.status = 'completed'
     })
   writeStore(data)
+  publishRestaurantEvent(order.restaurant_id, 'payment.completed', {
+    type: 'payment.completed',
+    restaurantId: order.restaurant_id,
+    tableId: session.table_id,
+    sessionId: session.id,
+    orderId: order.id,
+    paymentId: payment.id,
+    method: payment.method,
+    amount: payment.amount,
+  })
+  publishRestaurantEvent(order.restaurant_id, 'table.updated', {
+    type: 'table.updated',
+    restaurantId: order.restaurant_id,
+    tableId: session.table_id,
+    tableNumber: table?.table_number || null,
+    tableStatus: table?.status || null,
+    guestCount: table?.guest_count || 0,
+  })
   return sendJson(res, 200, { success: true, payment })
 }
 
@@ -544,15 +747,45 @@ function handleGetPayments(req, res, url) {
 
 function handleOwnerAnalytics(req, res, url) {
   const restaurantId = url.searchParams.get('restaurant_id')
+  const range = url.searchParams.get('range') || 'today'
   if (!restaurantId) return sendJson(res, 400, { error: 'Restaurant ID required' })
   const data = readStore()
-  const restaurantOrders = data.orders.filter((order) => order.restaurant_id === restaurantId)
-  const sessionIds = data.sessions.filter((session) => session.restaurant_id === restaurantId).map((session) => session.id)
-  const restaurantPayments = data.payments.filter((payment) => sessionIds.includes(payment.session_id))
+  const restaurantSessions = data.sessions.filter(
+    (session) =>
+      session.restaurant_id === restaurantId && isInRange(session.opened_at, range)
+  )
+  const sessionIds = restaurantSessions.map((session) => session.id)
+  const restaurantOrders = data.orders.filter(
+    (order) => order.restaurant_id === restaurantId && isInRange(order.created_at, range)
+  )
+  const restaurantPayments = data.payments.filter(
+    (payment) =>
+      sessionIds.includes(payment.session_id) && isInRange(payment.created_at, range)
+  )
   const totalOrders = restaurantOrders.length
   const totalRevenue = restaurantPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
   const completedOrders = restaurantOrders.filter((order) => order.status === 'completed').length
   const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0
+  const servedTables = new Set(restaurantSessions.map((session) => session.table_id)).size
+  const customerCount = data.tables
+    .filter((table) => table.restaurant_id === restaurantId)
+    .reduce((sum, table) => sum + Number(table.guest_count || 0), 0)
+  const serviceDurations = restaurantSessions
+    .filter((session) => session.closed_at)
+    .map(
+      (session) =>
+        Math.max(
+          0,
+          Math.round(
+            (new Date(session.closed_at).getTime() - new Date(session.opened_at).getTime()) /
+              60000
+          )
+        )
+    )
+  const averageServiceMinutes =
+    serviceDurations.length > 0
+      ? serviceDurations.reduce((sum, value) => sum + value, 0) / serviceDurations.length
+      : 0
 
   const topMap = {}
   data.order_items.forEach((item) => {
@@ -570,15 +803,61 @@ function handleOwnerAnalytics(req, res, url) {
       (paymentMethods[payment.method] || 0) + Number(payment.amount || 0)
   })
 
+  const revenueByDate = {}
+  restaurantPayments.forEach((payment) => {
+    const key = formatDateLabel(payment.created_at)
+    revenueByDate[key] = (revenueByDate[key] || 0) + Number(payment.amount || 0)
+  })
+
   return sendJson(res, 200, {
-    stats: { totalOrders, totalRevenue, completedOrders, averageOrderValue },
+    stats: {
+      totalOrders,
+      totalRevenue,
+      completedOrders,
+      averageOrderValue,
+      customerCount,
+      servedTables,
+      averageServiceMinutes,
+    },
     topSellingItems: Object.values(topMap).sort((a, b) => b.quantity - a.quantity),
     paymentMethods,
+    revenueByDate: Object.entries(revenueByDate)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, amount]) => ({ date, amount })),
     recentOrders: restaurantOrders.slice(-10).reverse(),
+    range,
   })
 }
 
 async function routeRequest(req, res, url) {
+  if (req.method === 'GET' && url.pathname === '/api/events') {
+    const restaurantId = url.searchParams.get('restaurant_id')
+    const role = url.searchParams.get('role') || 'public'
+    if (!restaurantId) return sendJson(res, 400, { error: 'Restaurant ID required' })
+
+    if (role === 'staff' || role === 'owner') {
+      const queryToken = url.searchParams.get('token')
+      if (queryToken && !req.headers.authorization) {
+        req.headers.authorization = `Bearer ${queryToken}`
+      }
+      const user = requireAuth(req, res, ['staff', 'owner'])
+      if (!user) return
+      subscribe(req, res, {
+        restaurantId: user.restaurant_id,
+        role: user.role,
+        userId: user.id,
+      })
+      return
+    }
+
+    subscribe(req, res, {
+      restaurantId,
+      role: 'public',
+      userId: null,
+    })
+    return
+  }
+
   if (req.method === 'POST' && url.pathname === '/api/auth/signup') return handleAuthSignup(req, res)
   if (req.method === 'POST' && url.pathname === '/api/auth/signin') return handleAuthSignin(req, res)
   if (req.method === 'GET' && url.pathname === '/api/menu') return handleMenu(req, res, url)
@@ -587,29 +866,106 @@ async function routeRequest(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/sessions/payment-request') return handlePaymentRequest(req, res)
   if (req.method === 'POST' && url.pathname === '/api/orders') return handleCreateOrder(req, res)
   if (req.method === 'GET' && url.pathname === '/api/orders') return handleGetOrders(req, res, url)
-  if (req.method === 'GET' && url.pathname === '/api/staff/orders') return handleStaffOrders(req, res, url)
-  if (req.method === 'PATCH' && url.pathname === '/api/staff/orders') return handlePatchStaffOrders(req, res)
-  if (req.method === 'GET' && url.pathname === '/api/staff/tables') return handleStaffTables(req, res, url)
-  if (req.method === 'POST' && url.pathname === '/api/staff/tables') return handleCreateTables(req, res)
-  if (req.method === 'PATCH' && url.pathname === '/api/staff/tables') return handleUpdateTable(req, res)
-  if (req.method === 'DELETE' && url.pathname === '/api/staff/tables') return handleDeleteTable(req, res, url)
-  if (req.method === 'POST' && url.pathname === '/api/payments') return handlePayments(req, res)
+  if (req.method === 'GET' && url.pathname === '/api/staff/orders') {
+    if (!requireAuth(req, res, ['staff', 'owner'])) return
+    return handleStaffOrders(req, res, url)
+  }
+  if (req.method === 'PATCH' && url.pathname === '/api/staff/orders') {
+    if (!requireAuth(req, res, ['staff', 'owner'])) return
+    if (!requirePermission(req, res, 'manage_orders')) return
+    return handlePatchStaffOrders(req, res)
+  }
+  if (req.method === 'GET' && url.pathname === '/api/staff/tables') {
+    if (!requireAuth(req, res, ['staff', 'owner'])) return
+    return handleStaffTables(req, res, url)
+  }
+  if (req.method === 'POST' && url.pathname === '/api/staff/tables') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleCreateTables(req, res)
+  }
+  if (req.method === 'PATCH' && url.pathname === '/api/staff/tables') {
+    if (!requireAuth(req, res, ['owner', 'staff'])) return
+    if (!requirePermission(req, res, 'manage_tables')) return
+    return handleUpdateTable(req, res)
+  }
+  if (req.method === 'DELETE' && url.pathname === '/api/staff/tables') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleDeleteTable(req, res, url)
+  }
+  if (req.method === 'POST' && url.pathname === '/api/payments') {
+    if (!requireAuth(req, res, ['staff', 'owner'])) return
+    if (!requirePermission(req, res, 'process_payments')) return
+    return handlePayments(req, res)
+  }
   if (req.method === 'GET' && url.pathname === '/api/payments') return handleGetPayments(req, res, url)
-  if (req.method === 'GET' && url.pathname === '/api/owner/menu') return handleOwnerMenu(req, res, url)
-  if (req.method === 'POST' && url.pathname === '/api/owner/menu') return handleOwnerMenuPost(req, res)
-  if (req.method === 'PATCH' && url.pathname === '/api/owner/menu') return handleOwnerMenuPatch(req, res)
-  if (req.method === 'DELETE' && url.pathname === '/api/owner/menu') return handleOwnerMenuDelete(req, res, url)
-  if (req.method === 'GET' && url.pathname === '/api/owner/categories') return handleOwnerCategories(req, res, url)
-  if (req.method === 'POST' && url.pathname === '/api/owner/categories') return handleOwnerCategoriesPost(req, res)
-  if (req.method === 'PATCH' && url.pathname === '/api/owner/categories') return handleOwnerCategoriesPatch(req, res)
-  if (req.method === 'DELETE' && url.pathname === '/api/owner/categories') return handleOwnerCategoriesDelete(req, res, url)
-  if (req.method === 'GET' && url.pathname === '/api/owner/orders') return handleOwnerOrders(req, res, url)
-  if (req.method === 'PATCH' && url.pathname === '/api/owner/orders') return handleOwnerOrdersPatch(req, res)
-  if (req.method === 'GET' && url.pathname === '/api/owner/staff') return handleOwnerStaff(req, res, url)
-  if (req.method === 'POST' && url.pathname === '/api/owner/staff') return handleOwnerStaffPost(req, res)
-  if (req.method === 'PATCH' && url.pathname === '/api/owner/staff') return handleOwnerStaffPatch(req, res)
-  if (req.method === 'DELETE' && url.pathname === '/api/owner/staff') return handleOwnerStaffDelete(req, res, url)
-  if (req.method === 'GET' && url.pathname === '/api/owner/analytics') return handleOwnerAnalytics(req, res, url)
+  if (req.method === 'GET' && url.pathname === '/api/owner/menu') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerMenu(req, res, url)
+  }
+  if (req.method === 'POST' && url.pathname === '/api/owner/menu/reorder') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerMenuReorder(req, res)
+  }
+  if (req.method === 'POST' && url.pathname === '/api/owner/menu') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerMenuPost(req, res)
+  }
+  if (req.method === 'PATCH' && url.pathname === '/api/owner/menu') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerMenuPatch(req, res)
+  }
+  if (req.method === 'DELETE' && url.pathname === '/api/owner/menu') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerMenuDelete(req, res, url)
+  }
+  if (req.method === 'GET' && url.pathname === '/api/owner/categories') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerCategories(req, res, url)
+  }
+  if (req.method === 'POST' && url.pathname === '/api/owner/categories/reorder') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerCategoriesReorder(req, res)
+  }
+  if (req.method === 'POST' && url.pathname === '/api/owner/categories') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerCategoriesPost(req, res)
+  }
+  if (req.method === 'PATCH' && url.pathname === '/api/owner/categories') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerCategoriesPatch(req, res)
+  }
+  if (req.method === 'DELETE' && url.pathname === '/api/owner/categories') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerCategoriesDelete(req, res, url)
+  }
+  if (req.method === 'GET' && url.pathname === '/api/owner/orders') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerOrders(req, res, url)
+  }
+  if (req.method === 'PATCH' && url.pathname === '/api/owner/orders') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerOrdersPatch(req, res)
+  }
+  if (req.method === 'GET' && url.pathname === '/api/owner/staff') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerStaff(req, res, url)
+  }
+  if (req.method === 'POST' && url.pathname === '/api/owner/staff') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerStaffPost(req, res)
+  }
+  if (req.method === 'PATCH' && url.pathname === '/api/owner/staff') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerStaffPatch(req, res)
+  }
+  if (req.method === 'DELETE' && url.pathname === '/api/owner/staff') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerStaffDelete(req, res, url)
+  }
+  if (req.method === 'GET' && url.pathname === '/api/owner/analytics') {
+    if (!requireAuth(req, res, ['owner'])) return
+    return handleOwnerAnalytics(req, res, url)
+  }
   return notFound(res)
 }
 

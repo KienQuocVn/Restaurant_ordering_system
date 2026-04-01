@@ -10,6 +10,7 @@ interface Staff {
   name: string
   email: string
   is_active?: boolean
+  permissions?: Record<string, boolean>
 }
 
 interface ActivityLog {
@@ -25,6 +26,7 @@ interface StaffManagerProps {
   onCreateStaff: (payload: { name: string; email: string; password: string }) => void
   onToggleStaff: (staffId: string, isActive: boolean) => void
   onDeleteStaff: (staffId: string) => void
+  onUpdatePermissions?: (staffId: string, permissions: Record<string, boolean>) => void
   loading?: boolean
 }
 
@@ -34,6 +36,7 @@ export function StaffManager({
   onCreateStaff,
   onToggleStaff,
   onDeleteStaff,
+  onUpdatePermissions,
   loading,
 }: StaffManagerProps) {
   const [formData, setFormData] = useState({
@@ -41,6 +44,12 @@ export function StaffManager({
     email: '',
     password: '',
   })
+  const permissionLabels: Array<{ key: string; label: string }> = [
+    { key: 'manage_orders', label: 'Orders' },
+    { key: 'process_payments', label: 'Payments' },
+    { key: 'manage_tables', label: 'Tables' },
+    { key: 'view_dashboard', label: 'Dashboard' },
+  ]
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -98,6 +107,30 @@ export function StaffManager({
                     <p className="text-xs text-gray-500">
                       {member.is_active === false ? 'Inactive' : 'Active'}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {permissionLabels.map((permission) => {
+                        const enabled = Boolean(member.permissions?.[permission.key])
+                        return (
+                          <button
+                            key={permission.key}
+                            type="button"
+                            className={`rounded-full border px-2 py-1 text-xs ${
+                              enabled
+                                ? 'border-[#2ad38b] bg-green-50 text-[#128c5a]'
+                                : 'border-gray-200 bg-white text-gray-500'
+                            }`}
+                            disabled={loading || !onUpdatePermissions}
+                            onClick={() =>
+                              onUpdatePermissions?.(member.id, {
+                                [permission.key]: !enabled,
+                              })
+                            }
+                          >
+                            {permission.label}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button

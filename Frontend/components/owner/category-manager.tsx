@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Edit2, Trash2 } from 'lucide-react'
+import { Edit2, Trash2, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Category {
   id: string
@@ -17,6 +17,8 @@ interface CategoryManagerProps {
   onAddCategory: (name: string) => void
   onUpdateCategory: (categoryId: string, name: string) => void
   onDeleteCategory: (categoryId: string) => void
+  onToggleCategory?: (categoryId: string, isActive: boolean) => void
+  onReorderCategories?: (categoryIds: string[]) => void
   loading?: boolean
 }
 
@@ -25,6 +27,8 @@ export function CategoryManager({
   onAddCategory,
   onUpdateCategory,
   onDeleteCategory,
+  onToggleCategory,
+  onReorderCategories,
   loading,
 }: CategoryManagerProps) {
   const [newName, setNewName] = useState('')
@@ -61,7 +65,7 @@ export function CategoryManager({
           {categories.length === 0 ? (
             <p className="text-sm text-gray-500">No categories yet</p>
           ) : (
-            categories.map((category) => (
+            categories.map((category, index) => (
               <div
                 key={category.id}
                 className="flex items-center justify-between gap-3 rounded-lg border bg-gray-50 p-3"
@@ -82,6 +86,30 @@ export function CategoryManager({
                 )}
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (index === 0 || !onReorderCategories) return
+                      const next = [...categories]
+                      ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
+                      onReorderCategories(next.map((item) => item.id))
+                    }}
+                    className="text-gray-500"
+                    disabled={loading || index === 0 || !onReorderCategories}
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (index === categories.length - 1 || !onReorderCategories) return
+                      const next = [...categories]
+                      ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
+                      onReorderCategories(next.map((item) => item.id))
+                    }}
+                    className="text-gray-500"
+                    disabled={loading || index === categories.length - 1 || !onReorderCategories}
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </button>
                   {editingId === category.id ? (
                     <>
                       <Button
@@ -110,6 +138,16 @@ export function CategoryManager({
                     </>
                   ) : (
                     <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={loading || !onToggleCategory}
+                        onClick={() =>
+                          onToggleCategory?.(category.id, category.is_active === false)
+                        }
+                      >
+                        {category.is_active === false ? 'Activate' : 'Hide'}
+                      </Button>
                       <button
                         onClick={() => {
                           setEditingId(category.id)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { QRScanner } from '@/components/customer/qr-scanner'
@@ -16,6 +16,11 @@ interface MenuItem {
   category_id: string
   image_url?: string
   is_available: boolean
+  options?: Array<{
+    name: string
+    multi?: boolean
+    values: Array<{ label: string; price: number }>
+  }>
 }
 
 interface MenuCategory {
@@ -25,10 +30,16 @@ interface MenuCategory {
 
 interface CartItem {
   id: string
+  menuItemId: string
   name: string
   price: number
   quantity: number
   note?: string
+  selectedOptions?: Array<{
+    name: string
+    value: string
+    price_add: number
+  }>
 }
 
 interface SessionOrder {
@@ -62,6 +73,7 @@ export default function CustomerPage() {
   const [sessionOrders, setSessionOrders] = useState<SessionOrder[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
 
   useEffect(() => {
     const token = searchParams.get('token')
@@ -78,7 +90,6 @@ export default function CustomerPage() {
     }
   }, [searchParams])
 
-  // Load menu when restaurant is selected
   useEffect(() => {
     if (!restaurantId) return
 
@@ -86,9 +97,7 @@ export default function CustomerPage() {
       setLoading(true)
       setError('')
       try {
-        const response = await fetch(
-          apiUrl(`/api/menu?restaurant_id=${restaurantId}`)
-        )
+        const response = await fetch(apiUrl(`/api/menu?restaurant_id=${restaurantId}`))
         if (!response.ok) throw new Error('Failed to load menu')
 
         const data = await response.json()
@@ -109,6 +118,45 @@ export default function CustomerPage() {
     if (!tableId) return
     loadCurrentSession(tableId)
   }, [tableId])
+
+  useEffect(() => {
+    if (!restaurantId || !tableId) return
+    const events = new EventSource(apiUrl(`/api/events?restaurant_id=${restaurantId}&role=public`))
+
+    events.addEventListener('order.created', (event) => {
+      const payload = JSON.parse((event as MessageEvent).data)
+      if (payload.tableId === tableId) {
+        setNotice('Ban da duoc dong bo order moi theo realtime.')
+        loadCurrentSession(tableId)
+      }
+    })
+
+    events.addEventListener('order.updated', (event) => {
+      const payload = JSON.parse((event as MessageEvent).data)
+      if (payload.tableId === tableId) {
+        loadCurrentSession(tableId)
+      }
+    })
+
+    events.addEventListener('session.updated', (event) => {
+      const payload = JSON.parse((event as MessageEvent).data)
+      if (payload.tableId === tableId) {
+        loadCurrentSession(tableId)
+      }
+    })
+
+    events.addEventListener('payment.completed', (event) => {
+      const payload = JSON.parse((event as MessageEvent).data)
+      if (payload.tableId === tableId) {
+        setNotice('Ban da duoc thanh toan xong. Co the mo session moi de dat tiep.')
+        loadCurrentSession(tableId)
+      }
+    })
+
+    return () => {
+      events.close()
+    }
+  }, [restaurantId, tableId])
 
   const loadTableContext = async (payload: {
     token?: string
@@ -154,9 +202,7 @@ export default function CustomerPage() {
 
   const loadCurrentSession = async (currentTableId: string) => {
     try {
-      const response = await fetch(
-        apiUrl(`/api/sessions/current?table_id=${currentTableId}`)
-      )
+      const response = await fetch(apiUrl(`/api/sessions/current?table_id=${currentTableId}`))
       if (!response.ok) throw new Error('Failed to load session')
       const data = await response.json()
       setSession(data.session)
@@ -174,32 +220,40 @@ export default function CustomerPage() {
     await loadTableContext(payload)
   }
 
-  const handleAddToCart = (item: MenuItem, quantity: number) => {
+  const handleAddToCart = (
+    item: MenuItem,
+    quantity: number,
+    selectedOptions: CartItem['selectedOptions'] = [],
+    unitPrice = item.price
+  ) => {
+    const optionSignature = (selectedOptions || [])
+      .map((option) => `${option.name}:${option.value}`)
+      .join('|')
+    const lineId = `${item.id}::${optionSignature || 'base'}`
+
     setCartItems((prev) => {
-      const existing = prev.find((ci) => ci.id === item.id)
+      const existing = prev.find((ci) => ci.id === lineId)
       if (existing) {
         return prev.map((ci) =>
-          ci.id === item.id ? { ...ci, quantity: ci.quantity + quantity } : ci
+          ci.id === lineId ? { ...ci, quantity: ci.quantity + quantity } : ci
         )
       }
       return [
         ...prev,
         {
-          id: item.id,
+          id: lineId,
+          menuItemId: item.id,
           name: item.name,
-          price: item.price,
+          price: unitPrice,
           quantity,
+          selectedOptions,
         },
       ]
     })
   }
 
   const handleUpdateQuantity = (itemId: string, quantity: number) => {
-    setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId ? { ...item, quantity } : item
-      )
-    )
+    setCartItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, quantity } : item)))
   }
 
   const handleRemoveItem = (itemId: string) => {
@@ -207,9 +261,7 @@ export default function CustomerPage() {
   }
 
   const handleUpdateItemNote = (itemId: string, note: string) => {
-    setCartItems((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, note } : item))
-    )
+    setCartItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, note } : item)))
   }
 
   const handleCheckout = async () => {
@@ -219,10 +271,7 @@ export default function CustomerPage() {
     setError('')
 
     try {
-      const totalAmount = cartItems.reduce(
-        (sum, item) => sum + item.price * item.quantity,
-        0
-      )
+      const totalAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
       const response = await fetch(apiUrl('/api/orders'), {
         method: 'POST',
@@ -233,9 +282,11 @@ export default function CustomerPage() {
           tableId,
           items: cartItems.map((item) => ({
             id: item.id,
+            menuItemId: item.menuItemId,
             quantity: item.quantity,
             price: item.price,
             note: item.note || '',
+            selectedOptions: item.selectedOptions || [],
           })),
           totalAmount,
           notes,
@@ -243,7 +294,6 @@ export default function CustomerPage() {
       })
 
       const data = await response.json()
-
       if (!response.ok) {
         setError(data.error || 'Failed to place order')
         return
@@ -252,12 +302,12 @@ export default function CustomerPage() {
       setStep('confirmation')
       setCartItems([])
       setNotes('')
+      setNotice('Order da duoc day den nhan vien theo realtime.')
       await loadCurrentSession(tableId)
 
-      // Redirect after 3 seconds
       setTimeout(() => {
         setStep('menu')
-      }, 3000)
+      }, 2000)
     } catch (err) {
       setError('An error occurred. Please try again.')
       console.error(err)
@@ -285,6 +335,7 @@ export default function CustomerPage() {
       }
 
       setSession(data.session)
+      setNotice('Yeu cau thanh toan da gui den nhan vien.')
     } catch (err) {
       setError('Khong the gui yeu cau thanh toan')
       console.error(err)
@@ -295,7 +346,6 @@ export default function CustomerPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-[#2ad38b]">Order System</h1>
@@ -315,6 +365,7 @@ export default function CustomerPage() {
                   setTableNumber(null)
                   setSession(null)
                   setSessionOrders([])
+                  setNotice('')
                 }}
                 variant="outline"
                 size="sm"
@@ -334,6 +385,11 @@ export default function CustomerPage() {
         ) : step === 'menu' ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2">
+              {notice && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded mb-4">
+                  {notice}
+                </div>
+              )}
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
                   {error}
@@ -345,9 +401,7 @@ export default function CustomerPage() {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <h2 className="font-semibold text-lg">Current Table Session</h2>
-                      <p className="text-sm text-gray-600">
-                        Status: {session.status}
-                      </p>
+                      <p className="text-sm text-gray-600">Status: {session.status}</p>
                       <p className="text-sm text-gray-600">
                         Total ordered: {formatCurrency(session.total_amount)}
                       </p>
@@ -388,9 +442,7 @@ export default function CustomerPage() {
               <div className="bg-white border rounded-lg p-4">
                 <h3 className="font-semibold text-lg mb-3">Ordered In This Session</h3>
                 {sessionOrders.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    No orders yet for this table session.
-                  </p>
+                  <p className="text-sm text-gray-500">No orders yet for this table session.</p>
                 ) : (
                   <div className="space-y-3">
                     {sessionOrders.map((order) => (
@@ -399,9 +451,7 @@ export default function CustomerPage() {
                           <span className="text-sm font-medium">
                             {new Date(order.created_at).toLocaleTimeString()}
                           </span>
-                          <span className="text-xs uppercase text-gray-500">
-                            {order.status}
-                          </span>
+                          <span className="text-xs uppercase text-gray-500">{order.status}</span>
                         </div>
                         <div className="space-y-1">
                           {order.order_items.map((item) => (
@@ -412,9 +462,7 @@ export default function CustomerPage() {
                               <span>
                                 {item.quantity}x {item.menu_items.name}
                               </span>
-                              <span>
-                                {formatCurrency(item.quantity * item.unit_price)}
-                              </span>
+                              <span>{formatCurrency(item.quantity * item.unit_price)}</span>
                             </div>
                           ))}
                         </div>
@@ -428,15 +476,9 @@ export default function CustomerPage() {
         ) : (
           <div className="max-w-md mx-auto text-center space-y-4">
             <div className="bg-green-50 border border-green-200 rounded-lg p-8">
-              <h2 className="text-2xl font-bold text-green-700 mb-2">
-                Order Placed Successfully!
-              </h2>
-              <p className="text-green-600">
-                Your order has been sent to the kitchen.
-              </p>
-              <p className="text-sm text-green-500 mt-4">
-                Redirecting in a few seconds...
-              </p>
+              <h2 className="text-2xl font-bold text-green-700 mb-2">Order Placed Successfully!</h2>
+              <p className="text-green-600">Your order has been sent to the kitchen.</p>
+              <p className="text-sm text-green-500 mt-4">Redirecting in a few seconds...</p>
             </div>
           </div>
         )}

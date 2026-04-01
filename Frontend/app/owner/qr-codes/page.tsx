@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { apiUrl } from '@/lib/api'
+import { apiFetch, clearAuthSession, getStoredUser } from '@/lib/api'
 
 interface DiningTable {
   id: string
@@ -43,15 +43,18 @@ export default function QRCodesPage() {
 
   // Check if user is logged in and is owner
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (!userData) {
+    const parsedUser = getStoredUser()
+    if (!parsedUser) {
       router.push('/login')
       return
     }
 
-    const parsedUser = JSON.parse(userData)
     if (parsedUser.role !== 'owner') {
       router.push('/')
+      return
+    }
+    if (!parsedUser.restaurant_id) {
+      router.push('/login')
       return
     }
 
@@ -61,8 +64,10 @@ export default function QRCodesPage() {
 
   const loadTables = async (restaurantId: string) => {
     try {
-      const response = await fetch(
-        apiUrl(`/api/staff/tables?restaurant_id=${restaurantId}`)
+      const response = await apiFetch(
+        `/api/staff/tables?restaurant_id=${restaurantId}`,
+        {},
+        true
       )
       if (!response.ok) throw new Error('Failed to load tables')
 
@@ -86,14 +91,13 @@ export default function QRCodesPage() {
     setError('')
 
     try {
-      const response = await fetch(apiUrl('/api/staff/tables'), {
+      const response = await apiFetch('/api/staff/tables', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           restaurantId: user.restaurant_id,
           count,
         }),
-      })
+      }, true)
 
       if (!response.ok) {
         throw new Error('Failed to create tables')
@@ -113,7 +117,7 @@ export default function QRCodesPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('user')
+    clearAuthSession()
     router.push('/login')
   }
 
@@ -122,9 +126,8 @@ export default function QRCodesPage() {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch(apiUrl('/api/staff/tables'), {
+      const response = await apiFetch('/api/staff/tables', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tableId: editingTable.id,
           zone: editingTable.zone || 'Main',
@@ -132,7 +135,7 @@ export default function QRCodesPage() {
           guestCount: editingTable.guest_count || 0,
           status: editingTable.status || 'empty',
         }),
-      })
+      }, true)
       if (!response.ok) throw new Error('Failed to update table')
       await loadTables(user.restaurant_id)
       setSelectedTable(editingTable)
@@ -148,15 +151,14 @@ export default function QRCodesPage() {
     if (!selectedTable) return
     setLoading(true)
     try {
-      const response = await fetch(apiUrl('/api/staff/tables'), {
+      const response = await apiFetch('/api/staff/tables', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tableId: selectedTable.id,
           status: 'empty',
           guestCount: 0,
         }),
-      })
+      }, true)
       if (!response.ok) throw new Error('Failed to reset table')
       await loadTables(user.restaurant_id)
       setSelectedTable(null)
@@ -172,9 +174,10 @@ export default function QRCodesPage() {
     if (!selectedTable) return
     setLoading(true)
     try {
-      const response = await fetch(
-        apiUrl(`/api/staff/tables?table_id=${selectedTable.id}`),
-        { method: 'DELETE' }
+      const response = await apiFetch(
+        `/api/staff/tables?table_id=${selectedTable.id}`,
+        { method: 'DELETE' },
+        true
       )
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Failed to delete table')

@@ -14,10 +14,12 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatCurrency } from '@/lib/api'
 
 interface AnalyticsChartsProps {
   topSellingItems: Array<{ name: string; quantity: number; price: number }>
   paymentMethods: Record<string, number>
+  revenueByDate?: Array<{ date: string; amount: number }>
 }
 
 const COLORS = ['#2ad38b', '#0cceb0', '#1fb87e', '#16a86f', '#0d9860']
@@ -25,6 +27,7 @@ const COLORS = ['#2ad38b', '#0cceb0', '#1fb87e', '#16a86f', '#0d9860']
 export function AnalyticsCharts({
   topSellingItems,
   paymentMethods,
+  revenueByDate = [],
 }: AnalyticsChartsProps) {
   const paymentData = Object.entries(paymentMethods).map(([method, amount]) => ({
     name: method.replace('_', ' ').toUpperCase(),
@@ -95,6 +98,28 @@ export function AnalyticsCharts({
                   formatter={(value) => `$${(value as number).toFixed(2)}`}
                 />
               </PieChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <CardTitle>Revenue Trend</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {revenueByDate.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No revenue data</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={revenueByDate}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip formatter={(value) => formatCurrency(Number(value || 0))} />
+                <Legend />
+                <Bar dataKey="amount" fill="#0cceb0" name="Revenue" />
+              </BarChart>
             </ResponsiveContainer>
           )}
         </CardContent>

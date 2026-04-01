@@ -1,5 +1,29 @@
 const { createId, hashPassword, isoNow } = require('../data/store')
 
+function createDefaultPermissions(role) {
+  if (role === 'owner') {
+    return {
+      manage_menu: true,
+      manage_categories: true,
+      manage_staff: true,
+      manage_tables: true,
+      view_dashboard: true,
+      manage_orders: true,
+      process_payments: true,
+    }
+  }
+
+  return {
+    manage_menu: false,
+    manage_categories: false,
+    manage_staff: false,
+    manage_tables: false,
+    view_dashboard: false,
+    manage_orders: true,
+    process_payments: true,
+  }
+}
+
 function getActiveSession(data, tableId) {
   return (
     data.sessions.find(
@@ -93,6 +117,7 @@ function createUser(data, { email, password, name, role, restaurantId, restauran
     role,
     restaurant_id: resolvedRestaurantId,
     is_active: true,
+    permissions: createDefaultPermissions(role),
     created_at: isoNow(),
   }
   data.users.push(user)

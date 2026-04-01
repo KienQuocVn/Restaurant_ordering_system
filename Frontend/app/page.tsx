@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { getStoredUser } from '@/lib/api'
 
 export default function HomePage() {
   const router = useRouter()
@@ -17,14 +18,13 @@ export default function HomePage() {
   useEffect(() => {
     if (!mounted) return
 
-    const userData = localStorage.getItem('user')
-    if (userData) {
-      const parsedUser = JSON.parse(userData)
-      setUser(parsedUser)
+    const storedUser = getStoredUser()
+    if (storedUser) {
+      setUser(storedUser)
       
-      if (parsedUser.role === 'staff') {
+      if (storedUser.role === 'staff') {
         router.push('/staff')
-      } else if (parsedUser.role === 'owner') {
+      } else if (storedUser.role === 'owner') {
         router.push('/owner')
       }
     } else {

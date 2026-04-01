@@ -28,12 +28,16 @@ interface OwnerOrder {
 interface OrderManagerProps {
   orders: OwnerOrder[]
   onCancelOrder: (orderId: string, reason: string) => void
+  onPrintBill?: (order: OwnerOrder) => void
+  onPrintKitchenSlip?: (order: OwnerOrder) => void
   loading?: boolean
 }
 
 export function OrderManager({
   orders,
   onCancelOrder,
+  onPrintBill,
+  onPrintKitchenSlip,
   loading,
 }: OrderManagerProps) {
   const [cancelingId, setCancelingId] = useState('')
@@ -128,6 +132,23 @@ export function OrderManager({
                   )}
                 </div>
               )}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {onPrintBill && (
+                  <Button variant="outline" disabled={loading} onClick={() => onPrintBill(order)}>
+                    Print Bill
+                  </Button>
+                )}
+                {onPrintKitchenSlip && (
+                  <Button
+                    variant="outline"
+                    disabled={loading}
+                    onClick={() => onPrintKitchenSlip(order)}
+                  >
+                    Print Kitchen Slip
+                  </Button>
+                )}
+              </div>
             </div>
           ))
         )}

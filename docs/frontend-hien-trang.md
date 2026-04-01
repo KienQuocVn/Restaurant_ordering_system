@@ -21,15 +21,15 @@ Tai lieu nay tach rieng:
   - Nhan vien: `/staff`
   - Chu quan/Admin: `/owner`, `/owner/qr-codes`
 - [x] Khach hang hien tai da co the vao trang order ma khong can login
-- [ ] Frontend hien tai van dang goi API route nam trong `Frontend/app/api/*`
+- [x] Frontend flow chinh da goi backend rieng, khong con phu thuoc `Frontend/app/api/*`
 - [x] Da tach frontend thanh mot client goi backend doc lap qua `NEXT_PUBLIC_API_BASE_URL`
 
 ### Backend
 
-- [~] Van con mot so API route demo cu trong `Frontend/app/api/*`, nhung flow chinh da chuyen sang backend rieng
+- [x] Da bo cac API route demo cu trong `Frontend/app/api/*`, frontend flow chinh di truc tiep qua backend rieng
 - [x] Co file schema SQL va sample data trong `Frontend/scripts/*`
 - [x] Da co implementation backend doc lap trong thu muc `Backend`
-- [~] Da co kien truc backend rieng cho auth, menu, tables, sessions, orders, payments, categories, staff, owner orders; chua co realtime
+- [x] Da co kien truc backend rieng cho auth, menu, tables, sessions, orders, payments, categories, staff, owner orders; da bo sung realtime SSE cho flow order/table/session
 
 ## 2. Hien trang Frontend
 
@@ -38,16 +38,16 @@ Tai lieu nay tach rieng:
 - [x] `KH-01` Co man hinh scan/nhap QR va vao `/customer` khong can login
 - [x] `KH-01` QR token an toan dang `?token=<random>`
 - [x] `KH-02` Xem danh sach menu theo danh muc
-- [~] `KH-03` Xem chi tiet mon: ten, mo ta, gia, hinh anh
-- [ ] `KH-03` Tuy chon size, topping, option
+- [x] `KH-03` Xem chi tiet mon: ten, mo ta, gia, hinh anh
+- [x] `KH-03` Tuy chon size, topping, option o muc menu co cau hinh option
 - [x] `KH-04` Them mon vao gio hang
 - [x] `KH-04` Chinh sua so luong trong gio
 - [x] `KH-04` Ghi chu rieng cho tung mon
 - [x] `KH-05` Xem lai gio hang truoc khi dat
 - [x] `KH-06` Co luong gui order len he thong qua API
-- [ ] `KH-06` Order day ngay sang nhan vien va bep theo realtime dung nghia
+- [x] `KH-06` Order day ngay sang nhan vien va bep theo realtime dung nghia
 - [x] `KH-07` Xem cac mon da order trong phien ban
-- [~] `KH-08` Co the dat tiep tu menu
+- [x] `KH-08` Co the dat tiep tu menu
 - [x] `KH-08` Gom nhieu lan goi mon trong mot session ban dung nghia
 - [x] `KH-09` Gui yeu cau thanh toan tren giao dien khach
 
@@ -70,18 +70,18 @@ Tai lieu nay tach rieng:
 
 - [x] CRUD mon tren giao dien owner
 - [x] CRUD category tren UI
-- [ ] Quan ly option / topping
-- [ ] An / hien tam thoi theo nghia nghiep vu day du
-- [ ] Sap xep thu tu menu
-- [ ] Upload / quan ly hinh anh mon
+- [x] Quan ly option / topping o muc MVP bang cau hinh JSON option trong owner menu
+- [x] An / hien tam thoi theo nghia nghiep vu co ban bang `is_available`
+- [x] Sap xep thu tu menu
+- [x] Upload / quan ly hinh anh mon
 
 #### Quan ly order
 
 - [x] Xem tat ca order theo bo loc co ban
 - [x] Xem chi tiet tung order theo nghia quan tri co ban
 - [x] Huy mon / huy order kem ly do o muc order
-- [ ] In bill
-- [ ] In phieu bep
+- [x] In bill
+- [x] In phieu bep
 
 #### Thanh toan va tai chinh
 
@@ -95,8 +95,8 @@ Tai lieu nay tach rieng:
 - [x] Co KPI cards
 - [x] Co chart top selling items
 - [x] Co chart payment methods
-- [ ] Loc ngay / tuan / thang
-- [ ] CSV / PDF export
+- [x] Loc ngay / tuan / thang
+- [x] CSV / PDF export
 - [ ] So luot khach
 - [ ] So ban phuc vu
 - [ ] Thoi gian phuc vu trung binh
@@ -106,23 +106,23 @@ Tai lieu nay tach rieng:
 - [x] Tao nhan vien
 - [x] Sua / kich hoat / vo hieu hoa nhan vien co ban
 - [x] Xoa / disable nhan vien o muc nghiep vu co ban
-- [~] Phan quyen chi tiet o muc role owner/staff
+- [x] Phan quyen chi tiet o muc role owner/staff
 - [x] Activity log co ban
 
 ### 2.3 Vai tro nhan vien
 
 - [x] `NV-01` Dang nhap va vao dashboard rieng
-- [~] `NV-02` Xem table overview va mau trang thai co ban
+- [x] `NV-02` Xem table overview va mau trang thai co ban
 - [x] `NV-02` So khach theo ban
 - [x] `NV-02` Tong tien hien tai theo session ban
 - [~] `NV-03` Xem chi tiet order qua card
 - [x] `NV-03` Click vao ban de xem lich su / session / order co ban
-- [ ] `NV-04` Thong bao realtime bang WebSocket
-- [ ] `NV-04` Am thanh khi co order moi
+- [x] `NV-04` Thong bao realtime bang SSE
+- [x] `NV-04` Am thanh khi co order moi
 - [ ] `NV-05` Xac nhan da nhan / da chuyen bep dung luong nghiep vu
-- [~] `NV-05` Doi trang thai order co ban
-- [~] `NV-06` Chon phuong thuc thanh toan
-- [~] `NV-06` Tao QR dong theo tong tien o muc backend demo
+- [x] `NV-05` Doi trang thai order co ban
+- [x] `NV-06` Chon phuong thuc thanh toan
+- [x] `NV-06` Tao QR dong theo tong tien o muc backend demo
 - [ ] `NV-07` Callback / IPN xac nhan thanh toan thanh cong
 - [x] `NV-08` In bill co ban
 - [x] `NV-08` In phieu bep co ban
@@ -134,7 +134,7 @@ Tai lieu nay tach rieng:
 
 - [x] Co backend doc lap trong thu muc `Backend`
 - [x] Frontend goi backend qua base URL rieng
-- [~] Tach ro layer:
+- [x] Tach ro layer:
   - auth
   - tables
   - menu
@@ -143,15 +143,15 @@ Tai lieu nay tach rieng:
   - payments
   - categories
   - staff
-  - realtime
+  - realtime (SSE)
 - [~] Co env rieng cho frontend va backend
 
 ### 3.2 Auth va phan quyen
 
 - [x] Co signin / signup API tren backend rieng
 - [x] Luong UI login da chinh lai theo huong chi staff va admin login
-- [ ] JWT auth dung cho admin / staff
-- [ ] Middleware / guard chan route theo role o muc server
+- [x] JWT auth dung cho admin / staff
+- [x] Middleware / guard chan route theo role o muc server
 - [ ] Session khong phu thuoc `localStorage`
 - [ ] Refresh token / secure cookie / session management dung nghia
 
@@ -159,11 +159,12 @@ Tai lieu nay tach rieng:
 
 - [x] Co file schema: [01-init-schema.sql](d:/Work/Restaurant_ordering_system/Frontend/scripts/01-init-schema.sql)
 - [x] Co file sample data: [02-sample-data.sql](d:/Work/Restaurant_ordering_system/Frontend/scripts/02-sample-data.sql)
+- [x] Backend da co ket noi database local SQLite tai `Backend/data/store.db`
 - [ ] Schema thong nhat voi `docs/bao-cao.txt`
 - [ ] Schema thong nhat voi code API hien tai
 - [x] Co `sessions` trong backend data model
 - [ ] Mau du lieu seed khop schema that su
-- [~] Backend doc lap da co seed rieng bang JSON store, chua phai migration/seed DB that su
+- [~] Backend doc lap da co seed rieng bang JSON va dong bo sang SQLite local; chua phai migration/seed PostgreSQL that su
 
 ### 3.4 API nghiep vu
 
@@ -194,10 +195,10 @@ Tai lieu nay tach rieng:
 ### 3.5 Realtime
 
 - [ ] WebSocket / Socket.IO
-- [ ] Push order moi cho staff
-- [ ] Push order moi cho bep / KDS
-- [ ] Dong bo trang thai ban realtime
-- [ ] Dong bo tong tien theo session realtime
+- [x] Push order moi cho staff qua SSE
+- [x] Push order moi cho bep / KDS qua SSE muc MVP
+- [x] Dong bo trang thai ban realtime
+- [x] Dong bo tong tien theo session realtime
 
 ### 3.6 Thanh toan
 
@@ -210,8 +211,8 @@ Tai lieu nay tach rieng:
 
 ### 3.7 In bill / bep
 
-- [ ] In bill
-- [ ] In phieu bep
+- [x] In bill
+- [x] In phieu bep
 - [ ] Tich hop may in nhiet
 
 ## 4. Nhung diem da dung huong so voi bao cao
@@ -230,14 +231,14 @@ Tai lieu nay tach rieng:
 ## 5. Nhung diem chua dung hoac chua khop bao cao
 
 - [x] QR token ngau nhien / an toan theo mo ta bao cao o muc backend demo
-- [ ] WebSocket realtime < 1 giay
+- [x] Realtime SSE cho order/table/session o muc MVP
 - [x] Session ban dung nghia o muc backend demo
 - [x] Backend doc lap
 - [ ] Payment callback / IPN
 - [ ] JWT auth cho admin / staff
 - [ ] Nhan vien khong duoc truy cap dashboard doanh thu bang server-side authorization
 - [x] In bill / in phieu bep o muc client print co ban
-- [ ] Dashboard day du theo ngay / tuan / thang / export
+- [x] Dashboard co filter ngay / tuan / thang va export CSV/PDF muc co ban
 
 ## 6. No ky thuat uu tien xu ly
 
@@ -253,7 +254,7 @@ Tai lieu nay tach rieng:
 
 - [ ] Bo `localStorage` lam session chinh cho staff/admin
 - [ ] Bo viec dung `NEXT_PUBLIC_SUPABASE_ANON_KEY` cho API server-side quan trong
-- [ ] Them middleware / authorization check o backend
+- [x] Them middleware / authorization check o backend
 
 ### 6.3 Tach rieng backend
 
@@ -309,7 +310,7 @@ Luu y:
 - [x] Kiem tra tab Tables
 - [x] Kiem tra tab Completed
 - [x] Click tung ban de xem chi tiet session/order
-- [ ] Test thong bao realtime
+- [x] Test thong bao realtime
 - [x] Test QR thanh toan dong o muc link/QR demo
 - [x] Test in bill / in bep co ban
 

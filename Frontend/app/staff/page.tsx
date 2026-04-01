@@ -1,12 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { OrderCard } from '@/components/staff/order-card'
 import { PaymentDialog } from '@/components/staff/payment-dialog'
-import { apiUrl, formatCurrency } from '@/lib/api'
+import {
+  apiFetch,
+  apiUrl,
+  clearAuthSession,
+  formatCurrency,
+  getStoredToken,
+  getStoredUser,
+} from '@/lib/api'
 
 interface OrderItem {
   id: string
@@ -34,12 +41,32 @@ interface Order {
 interface DiningTable {
   id: string
   table_number: number
+  status?: string
+  guest_count?: number
   session?: {
     id: string
     status: string
     total_amount: number
   } | null
   orders: Order[]
+}
+
+function playNotificationTone() {
+  const AudioCtx =
+    typeof window !== 'undefined'
+      ? (window.AudioContext || (window as any).webkitAudioContext)
+      : null
+  if (!AudioCtx) return
+  const context = new AudioCtx()
+  const oscillator = context.createOscillator()
+  const gain = context.createGain()
+  oscillator.type = 'sine'
+  oscillator.frequency.value = 880
+  gain.gain.value = 0.04
+  oscillator.connect(gain)
+  gain.connect(context.destination)
+  oscillator.start()
+  oscillator.stop(context.currentTime + 0.2)
 }
 
 export default function StaffPage() {
@@ -49,6 +76,7 @@ export default function StaffPage() {
   const [tables, setTables] = useState<DiningTable[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [activeTab, setActiveTab] = useState('orders')
   const [paymentDialog, setPaymentDialog] = useState({
     open: false,
@@ -58,43 +86,90 @@ export default function StaffPage() {
     qrCodeUrl: '',
   })
   const [selectedTable, setSelectedTable] = useState<DiningTable | null>(null)
+  const knownOrdersRef = useRef<Set<string>>(new Set())
 
-  // Check if user is logged in and is staff
   useEffect(() => {
-    const userData = localStorage.getItem('user')
-    if (!userData) {
+    const parsedUser = getStoredUser()
+    if (!parsedUser) {
       router.push('/login')
       return
     }
 
-    const parsedUser = JSON.parse(userData)
     if (parsedUser.role !== 'staff') {
       router.push('/')
+      return
+    }
+    if (!parsedUser.restaurant_id) {
+      router.push('/login')
       return
     }
 
     setUser(parsedUser)
     loadOrders(parsedUser.restaurant_id)
     loadTables(parsedUser.restaurant_id)
+  }, [router])
 
-    // Refresh orders every 5 seconds
-    const interval = setInterval(() => {
-      loadOrders(parsedUser.restaurant_id)
-      loadTables(parsedUser.restaurant_id)
-    }, 5000)
+  useEffect(() => {
+    if (!user?.restaurant_id) return
 
-    return () => clearInterval(interval)
-  }, [])
+    const token = getStoredToken()
+    const events = new EventSource(
+      apiUrl(
+        `/api/events?restaurant_id=${user.restaurant_id}&role=staff&token=${encodeURIComponent(
+          token || ''
+        )}`
+      )
+    )
+
+    events.addEventListener('order.created', (event) => {
+      const payload = JSON.parse((event as MessageEvent).data)
+      if (!knownOrdersRef.current.has(payload.orderId)) {
+        playNotificationTone()
+      }
+      setNotice(`New order for table ${payload.tableNumber}`)
+      loadOrders(user.restaurant_id)
+      loadTables(user.restaurant_id)
+    })
+
+    events.addEventListener('order.updated', () => {
+      loadOrders(user.restaurant_id)
+      loadTables(user.restaurant_id)
+    })
+
+    events.addEventListener('table.updated', () => {
+      loadTables(user.restaurant_id)
+    })
+
+    events.addEventListener('session.updated', () => {
+      loadTables(user.restaurant_id)
+    })
+
+    events.addEventListener('payment.completed', () => {
+      loadOrders(user.restaurant_id)
+      loadTables(user.restaurant_id)
+    })
+
+    events.onerror = () => {
+      setNotice('Realtime connection interrupted, retrying...')
+    }
+
+    return () => {
+      events.close()
+    }
+  }, [user])
 
   const loadOrders = async (restaurantId: string) => {
     try {
-      const response = await fetch(
-        apiUrl(`/api/staff/orders?restaurant_id=${restaurantId}`)
+      const response = await apiFetch(
+        `/api/staff/orders?restaurant_id=${restaurantId}`,
+        {},
+        true
       )
       if (!response.ok) throw new Error('Failed to load orders')
 
       const data = await response.json()
       setOrders(data || [])
+      knownOrdersRef.current = new Set((data || []).map((order: Order) => order.id))
       setError('')
     } catch (err) {
       console.error('Error loading orders:', err)
@@ -104,11 +179,19 @@ export default function StaffPage() {
 
   const loadTables = async (restaurantId: string) => {
     try {
-      const response = await fetch(apiUrl(`/api/staff/tables?restaurant_id=${restaurantId}`))
+      const response = await apiFetch(
+        `/api/staff/tables?restaurant_id=${restaurantId}`,
+        {},
+        true
+      )
       if (!response.ok) throw new Error('Failed to load tables')
 
       const data = await response.json()
       setTables(data || [])
+      if (selectedTable) {
+        const nextSelected = (data || []).find((table: DiningTable) => table.id === selectedTable.id)
+        setSelectedTable(nextSelected || null)
+      }
     } catch (err) {
       console.error('Error loading tables:', err)
     }
@@ -117,11 +200,14 @@ export default function StaffPage() {
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     setLoading(true)
     try {
-      const response = await fetch(apiUrl('/api/staff/orders'), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, status: newStatus }),
-      })
+      const response = await apiFetch(
+        '/api/staff/orders',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ orderId, status: newStatus }),
+        },
+        true
+      )
 
       if (!response.ok) throw new Error('Failed to update order')
 
@@ -150,19 +236,21 @@ export default function StaffPage() {
   const handlePaymentSubmit = async (paymentMethod: string) => {
     setLoading(true)
     try {
-      const response = await fetch(apiUrl('/api/payments'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: paymentDialog.orderId,
-          paymentMethod,
-          amount: paymentDialog.totalAmount,
-        }),
-      })
-
-      if (!response.ok) throw new Error('Failed to process payment')
+      const response = await apiFetch(
+        '/api/payments',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            orderId: paymentDialog.orderId,
+            paymentMethod,
+            amount: paymentDialog.totalAmount,
+          }),
+        },
+        true
+      )
 
       const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Failed to process payment')
 
       if (user) {
         loadOrders(user.restaurant_id)
@@ -192,7 +280,7 @@ export default function StaffPage() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('user')
+    clearAuthSession()
     router.push('/login')
   }
 
@@ -270,35 +358,29 @@ export default function StaffPage() {
     )
   }
 
-  if (!user) {
-    return null
-  }
+  if (!user) return null
 
   const pendingOrders = orders.filter((o) => o.status === 'pending')
   const inProgressOrders = orders.filter((o) => o.status === 'preparing')
   const completedOrders = orders.filter((o) => o.status === 'completed')
   const occupiedTables = tables.filter((t) => t.orders.length > 0)
+  const canManageOrders = user.permissions?.manage_orders !== false
+  const canProcessPayments = Boolean(user.permissions?.process_payments)
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-[#2ad38b]">Staff Dashboard</h1>
             <p className="text-sm text-gray-600">{user.name}</p>
           </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            size="sm"
-          >
+          <Button onClick={handleLogout} variant="outline" size="sm">
             Logout
           </Button>
         </div>
       </header>
 
-      {/* KPI Cards */}
       <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg p-4 border">
           <p className="text-sm text-gray-600 mb-1">Pending Orders</p>
@@ -318,11 +400,20 @@ export default function StaffPage() {
         </div>
       </div>
 
-      {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
+        {notice && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded mb-4">
+            {notice}
+          </div>
+        )}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
             {error}
+          </div>
+        )}
+        {!canManageOrders && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded mb-4">
+            Tai khoan nay dang o che do xem. Ban can owner cap them quyen xu ly order.
           </div>
         )}
 
@@ -333,7 +424,6 @@ export default function StaffPage() {
             <TabsTrigger value="completed">Completed</TabsTrigger>
           </TabsList>
 
-          {/* Orders Tab */}
           <TabsContent value="orders" className="space-y-4">
             <div className="space-y-4">
               <h3 className="text-lg font-bold">Pending Orders</h3>
@@ -353,7 +443,7 @@ export default function StaffPage() {
                       onStatusChange={handleStatusChange}
                       onPrintBill={() => handlePrintBill(order)}
                       onPrintKitchenSlip={() => handlePrintKitchenSlip(order)}
-                      loading={loading}
+                      loading={loading || !canManageOrders}
                     />
                   ))}
                 </div>
@@ -378,15 +468,17 @@ export default function StaffPage() {
                         onStatusChange={handleStatusChange}
                         onPrintBill={() => handlePrintBill(order)}
                         onPrintKitchenSlip={() => handlePrintKitchenSlip(order)}
-                        loading={loading}
+                        loading={loading || !canManageOrders}
                       />
-                      <Button
-                        onClick={() => handlePaymentClick(order)}
-                        className="w-full mt-2 bg-[#2ad38b] hover:bg-[#0cceb0] text-white"
-                        disabled={loading}
-                      >
-                        Process Payment
-                      </Button>
+                      {canProcessPayments && (
+                        <Button
+                          onClick={() => handlePaymentClick(order)}
+                          className="w-full mt-2 bg-[#2ad38b] hover:bg-[#0cceb0] text-white"
+                          disabled={loading}
+                        >
+                          Process Payment
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -394,17 +486,18 @@ export default function StaffPage() {
             </div>
           </TabsContent>
 
-          {/* Tables Tab */}
           <TabsContent value="tables" className="space-y-4">
             <h3 className="text-lg font-bold mb-4">Table Status Overview</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {tables.map((table) => {
                 const latestOrder = table.orders[0]
+                const resolvedStatus = table.status || latestOrder?.status || 'empty'
                 const statusColors: Record<string, string> = {
                   pending: 'bg-yellow-100 border-yellow-300',
                   preparing: 'bg-blue-100 border-blue-300',
                   completed: 'bg-green-100 border-green-300',
                   payment_requested: 'bg-orange-100 border-orange-300',
+                  occupied: 'bg-sky-100 border-sky-300',
                   empty: 'bg-white border-gray-300',
                 }
 
@@ -412,27 +505,17 @@ export default function StaffPage() {
                   <div
                     key={table.id}
                     onClick={() => setSelectedTable(table)}
-                    className={`p-4 rounded-lg border-2 text-center ${
-                      latestOrder
-                        ? statusColors[latestOrder.status] || statusColors.empty
-                        : statusColors.empty
+                    className={`cursor-pointer p-4 rounded-lg border-2 text-center ${
+                      statusColors[resolvedStatus] || statusColors.empty
                     }`}
                   >
                     <p className="text-sm font-bold">Table {table.table_number}</p>
-                    {latestOrder ? (
-                      <>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {latestOrder.status.replace('_', ' ').toUpperCase()}
-                        </p>
-                        <p className="text-lg font-bold mt-1">
-                          {formatCurrency(
-                            table.session?.total_amount || latestOrder.total_amount
-                          )}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-xs text-gray-400 mt-2">Empty</p>
-                    )}
+                    <p className="text-xs text-gray-600 mt-1">
+                      {resolvedStatus.replace('_', ' ').toUpperCase()}
+                    </p>
+                    <p className="text-lg font-bold mt-1">
+                      {formatCurrency(table.session?.total_amount || 0)}
+                    </p>
                   </div>
                 )
               })}
@@ -444,11 +527,7 @@ export default function StaffPage() {
                   <h4 className="font-semibold">
                     Table {selectedTable.table_number} details
                   </h4>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setSelectedTable(null)}
-                  >
+                  <Button size="sm" variant="outline" onClick={() => setSelectedTable(null)}>
                     Close
                   </Button>
                 </div>
@@ -456,9 +535,7 @@ export default function StaffPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div className="rounded border bg-gray-50 p-3">
                     <p className="text-sm text-gray-500">Session status</p>
-                    <p className="font-medium">
-                      {selectedTable.session?.status || 'empty'}
-                    </p>
+                    <p className="font-medium">{selectedTable.session?.status || 'empty'}</p>
                   </div>
                   <div className="rounded border bg-gray-50 p-3">
                     <p className="text-sm text-gray-500">Current total</p>
@@ -468,7 +545,7 @@ export default function StaffPage() {
                   </div>
                   <div className="rounded border bg-gray-50 p-3">
                     <p className="text-sm text-gray-500">Guest count</p>
-                    <p className="font-medium">{(selectedTable as any).guest_count || 0}</p>
+                    <p className="font-medium">{selectedTable.guest_count || 0}</p>
                   </div>
                 </div>
 
@@ -486,16 +563,11 @@ export default function StaffPage() {
                         </div>
                         <div className="space-y-1">
                           {order.order_items.map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex justify-between text-sm"
-                            >
+                            <div key={item.id} className="flex justify-between text-sm">
                               <span>
                                 {item.quantity}x {item.menu_items.name}
                               </span>
-                              <span>
-                                {formatCurrency(item.quantity * item.unit_price)}
-                              </span>
+                              <span>{formatCurrency(item.quantity * item.unit_price)}</span>
                             </div>
                           ))}
                         </div>
@@ -507,7 +579,6 @@ export default function StaffPage() {
             )}
           </TabsContent>
 
-          {/* Completed Tab */}
           <TabsContent value="completed" className="space-y-4">
             <h3 className="text-lg font-bold">Completed Orders</h3>
             {completedOrders.length === 0 ? (
@@ -535,7 +606,6 @@ export default function StaffPage() {
         </Tabs>
       </main>
 
-      {/* Payment Dialog */}
       <PaymentDialog
         open={paymentDialog.open}
         orderId={paymentDialog.orderId}

@@ -8,10 +8,16 @@ import { formatCurrency } from '@/lib/api'
 
 interface CartItem {
   id: string
+  menuItemId: string
   name: string
   price: number
   quantity: number
   note?: string
+  selectedOptions?: Array<{
+    name: string
+    value: string
+    price_add: number
+  }>
 }
 
 interface CartProps {
@@ -58,6 +64,13 @@ export function Cart({
                   <p className="text-xs text-gray-600">
                     {formatCurrency(item.price)} each
                   </p>
+                  {(item.selectedOptions || []).length > 0 && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {(item.selectedOptions || [])
+                        .map((option) => `${option.name}: ${option.value}`)
+                        .join(' | ')}
+                    </p>
+                  )}
                   <textarea
                     value={item.note || ''}
                     onChange={(e) => onUpdateNote?.(item.id, e.target.value)}

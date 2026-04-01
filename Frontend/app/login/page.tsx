@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { apiUrl } from '@/lib/api'
+import { apiFetch, storeAuthSession } from '@/lib/api'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -21,9 +21,8 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const response = await fetch(apiUrl('/api/auth/signin'), {
+      const response = await apiFetch('/api/auth/signin', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
 
@@ -34,13 +33,9 @@ export default function LoginPage() {
         return
       }
 
-      // Store user data in localStorage temporarily
-      localStorage.setItem('user', JSON.stringify(data.user))
+      storeAuthSession(data.user, data.token)
 
-      // Redirect based on role
-      if (data.user.role === 'customer') {
-        router.push('/customer')
-      } else if (data.user.role === 'staff') {
+      if (data.user.role === 'staff') {
         router.push('/staff')
       } else if (data.user.role === 'owner') {
         router.push('/owner')
